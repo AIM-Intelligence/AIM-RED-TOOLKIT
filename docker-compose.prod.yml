@@ -6,12 +6,11 @@ services:
     container_name: aim-red-backend
     ports:
       - "8000:8000"
-    volumes:
-      - ./packages/backend:/app
     environment:
       - PYTHONUNBUFFERED=1
     networks:
       - aim-red-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -21,20 +20,15 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: ./packages/frontend/Dockerfile
+      dockerfile: ./packages/frontend/Dockerfile.prod
     container_name: aim-red-frontend
     ports:
-      - "5173:5173"
-    volumes:
-      - ./packages/frontend:/app/packages/frontend
-      - /app/packages/frontend/node_modules
-      - /app/node_modules
-    environment:
-      - VITE_API_URL=http://backend:8000
+      - "80:80"
     depends_on:
       - backend
     networks:
       - aim-red-network
+    restart: unless-stopped
 
 networks:
   aim-red-network:

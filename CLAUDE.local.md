@@ -1,0 +1,2 @@
+- if you have to use library or module from outside of this project, you MUST use context7 first to get latest information, before you implement your code.
+- When implementing code, always review the relevant existing source code and make sure that the code you write integrates correctly with it and is placed in the proper location within the project structure.
