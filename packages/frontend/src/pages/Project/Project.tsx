@@ -18,8 +18,18 @@ import "@xyflow/react/dist/style.css";
 import type { DefaultNodeType } from "../../components/nodes/DefaultNode";
 import DefaultNode from "../../components/nodes/DefaultNode";
 import DefaultEdge from "../../components/edges/DefaultEdge";
+import IdeModal from "../../components/modal/Ide";
 
 export default function Project() {
+  const [isIdeModalOpen, setIsIdeModalOpen] = useState(false);
+  const [selectedNodeData, setSelectedNodeData] = useState<{
+    title: string;
+    code: string;
+  }>({
+    title: "Python IDE",
+    code: "# Write your Python code here\nprint('Hello, World!')",
+  });
+
   useEffect(() => {
     const style = document.createElement("style");
     style.textContent = `
@@ -64,6 +74,14 @@ export default function Project() {
     };
   }, []);
 
+  const handleNodeClick = (title: string) => {
+    setSelectedNodeData({
+      title,
+      code: "# Write your Python code here\nprint('Hello, World!')",
+    });
+    setIsIdeModalOpen(true);
+  };
+
   const initialNodes: DefaultNodeType[] = [
     {
       id: "1",
@@ -71,8 +89,8 @@ export default function Project() {
       position: { x: 100, y: 100 },
       data: {
         title: "Data Input",
-        content: "Load dataset from CSV",
-        onClick: () => console.log("Node 1 clicked"),
+        description: "Load dataset from CSV",
+        viewCode: () => handleNodeClick("Data Input"),
       },
     },
     {
@@ -81,8 +99,8 @@ export default function Project() {
       position: { x: 400, y: 100 },
       data: {
         title: "Preprocessing",
-        content: "Clean and normalize data",
-        onClick: () => console.log("Node 2 clicked"),
+        description: "Clean and normalize data",
+        viewCode: () => handleNodeClick("Preprocessing"),
       },
     },
     {
@@ -91,8 +109,8 @@ export default function Project() {
       position: { x: 700, y: 100 },
       data: {
         title: "Model Training",
-        content: "Train ML model",
-        onClick: () => console.log("Node 3 clicked"),
+        description: "Train ML model",
+        viewCode: () => handleNodeClick("Model Training"),
       },
     },
   ];
@@ -187,8 +205,9 @@ export default function Project() {
 
   // 새 노드 추가
   const addNewNode = useCallback(() => {
+    const nodeId = nodeIdCounter.toString();
     const newNode: DefaultNodeType = {
-      id: nodeIdCounter.toString(),
+      id: nodeId,
       type: "default",
       position: {
         x: Math.random() * 500 + 100,
@@ -196,8 +215,8 @@ export default function Project() {
       },
       data: {
         title: `Node ${nodeIdCounter}`,
-        content: "New node description",
-        onClick: () => console.log(`Node ${nodeIdCounter} clicked`),
+        description: "New node description",
+        viewCode: () => handleNodeClick(`Node ${nodeIdCounter}`),
       },
     };
     setNodes((nds) => [...nds, newNode]);
@@ -309,6 +328,14 @@ export default function Project() {
           </div>
         </Panel>
       </ReactFlow>
+
+      {/* IDE Modal */}
+      <IdeModal
+        isOpen={isIdeModalOpen}
+        onClose={() => setIsIdeModalOpen(false)}
+        nodeTitle={selectedNodeData.title}
+        initialCode={selectedNodeData.code}
+      />
     </div>
   );
 }

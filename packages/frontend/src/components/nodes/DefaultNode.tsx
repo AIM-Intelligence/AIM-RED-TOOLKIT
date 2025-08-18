@@ -4,8 +4,8 @@ import clsx from "clsx";
 
 export type DefaultNodeType = Node<{
   title: string;
-  content: string;
-  onClick: () => void;
+  description: string;
+  viewCode: () => void;
 }>;
 
 export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
@@ -26,8 +26,8 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
     const fileName = `${props.id}-${props.data.title.replace(/\s+/g, "-")}.py`;
     console.log("Generated file name:", fileName);
 
-    if (props.data.onClick) {
-      props.data.onClick();
+    if (props.data.viewCode) {
+      props.data.viewCode();
     }
   };
 
@@ -49,7 +49,6 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
       )}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
-      onClick={handleNodeClick}
     >
       {/* 삭제 버튼 */}
       {hovering && (
@@ -90,13 +89,13 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
           {props.data.title || "Node Title"}
         </h3>
         <p className="text-gray-400 text-xs mb-2">
-          {props.data.content || "Node description"}
+          {props.data.description || "Node description"}
         </p>
         <button
           className="text-xs bg-red-800 text-white px-2 py-1 rounded hover:bg-red-700 transition-colors"
           onClick={(e) => {
             e.stopPropagation();
-            alert(`Viewing code for: ${props.id}-${props.data.title}.py`);
+            handleNodeClick();
           }}
         >
           View Code
