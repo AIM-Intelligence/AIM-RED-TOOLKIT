@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import clsx from "clsx";
 
@@ -9,17 +9,7 @@ export type DefaultNodeType = Node<{
 }>;
 
 export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
-  const [outputNum, setOutputNum] = useState(1);
-  const [inputNum, setInputNum] = useState(1);
   const [hovering, setHovering] = useState(false);
-
-  const handleAddOutput = useCallback(() => {
-    setOutputNum((prev) => prev + 1);
-  }, []);
-
-  const handleAddInput = useCallback(() => {
-    setInputNum((prev) => prev + 1);
-  }, []);
 
   const handleNodeClick = () => {
     // 노드 클릭 시 파일 이름 생성 (project-id-title.py)
@@ -60,30 +50,6 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
         </button>
       )}
 
-      {/* Output 추가 버튼 */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          handleAddOutput();
-        }}
-        className="absolute top-2 right-2 w-5 h-5 bg-red-950 text-white rounded flex items-center justify-center text-xs hover:bg-red-900 transition-colors"
-        title="Add Output"
-      >
-        +
-      </button>
-
-      {/* Input 추가 버튼 */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          handleAddInput();
-        }}
-        className="absolute top-2 left-2 w-5 h-5 bg-red-950 text-white rounded flex items-center justify-center text-xs hover:bg-red-900 transition-colors"
-        title="Add Input"
-      >
-        +
-      </button>
-
       <div className="px-8">
         <h3 className="text-white font-semibold text-sm mb-1">
           {props.data.title || "Node Title"}
@@ -102,41 +68,25 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
         </button>
       </div>
 
-      {/* Dynamic Input Handles */}
-      {Array.from({ length: inputNum }, (_, index) => {
-        const handleId = `input-${index}`;
-        return (
-          <Handle
-            key={handleId}
-            id={handleId}
-            type="target"
-            position={Position.Left}
-            className="w-3 h-3 bg-blue-600 border-2 border-blue-400 hover:bg-blue-500"
-            style={{
-              left: -6,
-              top: `${30 + index * 20}px`,
-            }}
-          />
-        );
-      })}
+      <Handle
+        type="target"
+        position={Position.Left}
+        className="w-3 h-3"
+        style={{
+          left: -6,
+          top: `${30}px`,
+        }}
+      />
 
-      {/* Dynamic Output Handles */}
-      {Array.from({ length: outputNum }, (_, index) => {
-        const handleId = `output-${index}`;
-        return (
-          <Handle
-            key={handleId}
-            id={handleId}
-            type="source"
-            position={Position.Right}
-            className="w-3 h-3 bg-green-600 border-2 border-green-400 hover:bg-green-500"
-            style={{
-              right: -6,
-              top: `${30 + index * 20}px`,
-            }}
-          />
-        );
-      })}
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="w-3 h-3"
+        style={{
+          right: -6,
+          top: `${30}px`,
+        }}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import {
   ReactFlow,
   MiniMap,
@@ -13,6 +14,7 @@ import {
   type Edge,
   type NodeTypes,
   type EdgeTypes,
+  MarkerType,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { DefaultNodeType } from "../../components/nodes/DefaultNode";
@@ -21,11 +23,14 @@ import DefaultEdge from "../../components/edges/DefaultEdge";
 import IdeModal from "../../components/modal/Ide";
 
 export default function Project() {
+  const { projectId: projectHash } = useParams<{ projectId: string }>();
   const [isIdeModalOpen, setIsIdeModalOpen] = useState(false);
   const [selectedNodeData, setSelectedNodeData] = useState<{
+    nodeId: string;
     title: string;
     code: string;
   }>({
+    nodeId: "1",
     title: "Python IDE",
     code: "# Write your Python code here\nprint('Hello, World!')",
   });
@@ -74,8 +79,9 @@ export default function Project() {
     };
   }, []);
 
-  const handleNodeClick = (title: string) => {
+  const handleNodeClick = (nodeId: string, title: string) => {
     setSelectedNodeData({
+      nodeId,
       title,
       code: "# Write your Python code here\nprint('Hello, World!')",
     });
@@ -90,7 +96,7 @@ export default function Project() {
       data: {
         title: "Data Input",
         description: "Load dataset from CSV",
-        viewCode: () => handleNodeClick("Data Input"),
+        viewCode: () => handleNodeClick("1", "Data Input"),
       },
     },
     {
@@ -100,7 +106,7 @@ export default function Project() {
       data: {
         title: "Preprocessing",
         description: "Clean and normalize data",
-        viewCode: () => handleNodeClick("Preprocessing"),
+        viewCode: () => handleNodeClick("2", "Preprocessing"),
       },
     },
     {
@@ -110,32 +116,13 @@ export default function Project() {
       data: {
         title: "Model Training",
         description: "Train ML model",
-        viewCode: () => handleNodeClick("Model Training"),
+        viewCode: () => handleNodeClick("3", "Model Training"),
       },
     },
   ];
 
   // 초기 엣지 설정 - type: "custom" 추가
-  const initialEdges: Edge[] = [
-    {
-      id: "e1-2",
-      source: "1",
-      target: "2",
-      sourceHandle: "output-0",
-      targetHandle: "input-0",
-      type: "custom",
-      style: { stroke: "#64748b", strokeWidth: 2 },
-    },
-    {
-      id: "e2-3",
-      source: "2",
-      target: "3",
-      sourceHandle: "output-0",
-      targetHandle: "input-0",
-      type: "custom",
-      style: { stroke: "#64748b", strokeWidth: 2 },
-    },
-  ];
+  const initialEdges: Edge[] = [];
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
@@ -195,6 +182,7 @@ export default function Project() {
             id: `e${connection.source}-${connection.target}-${Date.now()}`,
             type: "custom",
             style: { stroke: "#64748b", strokeWidth: 2 },
+            markerEnd: { type: MarkerType.ArrowClosed },
           },
           eds
         )
@@ -216,7 +204,7 @@ export default function Project() {
       data: {
         title: `Node ${nodeIdCounter}`,
         description: "New node description",
-        viewCode: () => handleNodeClick(`Node ${nodeIdCounter}`),
+        viewCode: () => handleNodeClick(nodeId, `Node ${nodeIdCounter}`),
       },
     };
     setNodes((nds) => [...nds, newNode]);
@@ -333,6 +321,9 @@ export default function Project() {
       <IdeModal
         isOpen={isIdeModalOpen}
         onClose={() => setIsIdeModalOpen(false)}
+        projectHash={projectHash || ""}
+        projectTitle="Project"
+        nodeId={selectedNodeData.nodeId}
         nodeTitle={selectedNodeData.title}
         initialCode={selectedNodeData.code}
       />

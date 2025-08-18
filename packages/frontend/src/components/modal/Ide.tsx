@@ -1,12 +1,16 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import Editor from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import RunCodeButton from "../buttons/ide/RunCodeButton";
 import ExportCodeButton from "../buttons/ide/ExportCodeButton";
+import SaveStatusModal from "./SaveStatusModal";
 
 interface IdeModalProps {
   isOpen: boolean;
   onClose: () => void;
+  projectHash: string;
+  projectTitle: string;
+  nodeId: string;
   nodeTitle?: string;
   initialCode?: string;
 }
@@ -14,10 +18,48 @@ interface IdeModalProps {
 const IdeModal: React.FC<IdeModalProps> = ({
   isOpen,
   onClose,
+  projectHash,
+  projectTitle,
+  nodeId,
   nodeTitle = "Python IDE",
   initialCode = "# Write your Python code here\nprint('Hello, World!')",
 }) => {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"loading" | "success" | "error">("loading");
+
+  const handleSave = async () => {
+    if (!editorRef.current) return;
+    
+    setSaveModalOpen(true);
+    setSaveStatus("loading");
+    const code = editorRef.current.getValue();
+    
+    try {
+      const response = await fetch("http://localhost:8000/api/save-code", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          project_hash: projectHash,
+          project_title: projectTitle,
+          node_id: nodeId,
+          node_title: nodeTitle,
+          code: code,
+        }),
+      });
+      
+      if (response.ok) {
+        setSaveStatus("success");
+      } else {
+        setSaveStatus("error");
+      }
+    } catch (error) {
+      console.error("Error saving code:", error);
+      setSaveStatus("error");
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -55,7 +97,7 @@ const IdeModal: React.FC<IdeModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center z-[9999] backdrop-blur-lg bg-black/50 animate-fadeIn"
+      className="fixed inset-0 flex items-center justify-center z-[9990] backdrop-blur-lg bg-black/50 animate-fadeIn"
       onClick={onClose}
     >
       <div
@@ -66,6 +108,12 @@ const IdeModal: React.FC<IdeModalProps> = ({
         <div className="flex items-center justify-between p-4 border-b border-gray-800">
           {/* Left side - Action buttons */}
           <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 rounded-lg font-medium transition-all bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Save
+            </button>
             <RunCodeButton />
             <ExportCodeButton nodeTitle="" />
           </div>
@@ -137,6 +185,13 @@ const IdeModal: React.FC<IdeModalProps> = ({
           />
         </div>
       </div>
+      
+      {/* Save Status Modal */}
+      <SaveStatusModal
+        isOpen={saveModalOpen}
+        status={saveStatus}
+        onClose={() => setSaveModalOpen(false)}
+      />
     </div>
   );
 };

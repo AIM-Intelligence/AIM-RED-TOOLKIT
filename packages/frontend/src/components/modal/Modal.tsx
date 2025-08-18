@@ -44,7 +44,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
       onClick={onClose}
     >
       <div
-        className="relative bg-[#0a0a0a] rounded-xl max-w-[90vw] max-h-[90vh] overflow-auto shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp min-w-[400px] min-h-[200px] sm:min-w-[90vw] sm:mx-4"
+        className="relative bg-[#0a0a0a] rounded-xl max-w-[75vw] max-h-[75vh] overflow-auto shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp min-w-[400px] min-h-[200px] sm:min-w-[90vw] sm:mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         <button
