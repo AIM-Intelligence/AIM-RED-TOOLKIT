@@ -59,7 +59,11 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-black text-white p-8">
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-4xl font-bold mb-2">Projects</h1>
+        <div className="h-9 flex flex-row items-center mb-3">
+          <img src="/aim-red.png" alt="AIM-Intelligence" className="h-8 mr-2" />
+          <h1 className="text-4xl font-bold ">Projects</h1>
+        </div>
+
         <p className="text-gray-400 mb-8">
           Select a project or create a new one
         </p>
@@ -69,7 +73,7 @@ export default function Home() {
             <div
               key={project.id}
               onClick={() => handleProjectClick(project)}
-              className="bg-gray-800 border border-gray-700 rounded-lg p-6 cursor-pointer hover:bg-gray-750 hover:border-red-700 hover:border-2 transition-all duration-200"
+              className="bg-black border-2 border-gray-500 rounded-lg p-6 cursor-pointer hover:bg-gray-750 hover:border-red-700 transition-all duration-200"
             >
               <h2 className="text-xl font-semibold mb-2">{project.title}</h2>
               <p className="text-gray-400 text-sm">{project.description}</p>
@@ -78,11 +82,11 @@ export default function Home() {
 
           <div
             onClick={handleCreateProject}
-            className="bg-gray-800 border-2 border-dashed border-gray-600 rounded-lg p-6 cursor-pointer hover:border-red-700 hover:border-2 hover:bg-gray-750 transition-all duration-200 flex items-center justify-center"
+            className="bg-black border-2 border-dashed border-gray-500 rounded-lg p-6 cursor-pointer hover:border-red-700 hover:bg-gray-750 hover:text-red-700 transition-all duration-200 flex items-center justify-center"
           >
             <div className="text-center">
               <div className="text-4xl mb-2">+</div>
-              <p className="text-gray-400">Create New Project</p>
+              <p className="">Create New Project</p>
             </div>
           </div>
         </div>
