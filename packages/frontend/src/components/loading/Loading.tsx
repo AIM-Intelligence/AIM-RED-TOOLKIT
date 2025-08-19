@@ -15,7 +15,7 @@ export default function Loading() {
         alt="Loading"
         className="w-9 h-9 animate-spin-reverse"
       />
-      <span className="text-white text-lg ml-4 p-8">{text}</span>
+      <span className="text-white text-lg p-8">{text}</span>
     </div>
   );
 }

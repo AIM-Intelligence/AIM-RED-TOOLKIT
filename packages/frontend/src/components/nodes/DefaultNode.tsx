@@ -34,7 +34,7 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
   return (
     <div
       className={clsx(
-        "bg-gray-900 rounded-lg border-2 border-gray-700 p-4 min-w-[200px] relative",
+        "bg-black rounded-lg border-2 border-gray-500 p-4 min-w-[200px] relative",
         hovering && "border-red-400 shadow-lg"
       )}
       onMouseEnter={() => setHovering(true)}

@@ -10,7 +10,7 @@ interface IdeModalProps {
   onClose: () => void;
   projectTitle: string;
   nodeId: string;
-  nodeTitle?: string;
+  nodeTitle: string;
   initialCode?: string;
 }
 
@@ -19,8 +19,8 @@ const IdeModal: React.FC<IdeModalProps> = ({
   onClose,
   projectTitle,
   nodeId,
-  nodeTitle = "Python IDE",
-  initialCode = "# Write your Python code here\nprint('Hello, World!')",
+  nodeTitle,
+  initialCode = "# Write your Python function here\ndef foo():\n  return 'Hello, World!'",
 }) => {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
@@ -153,12 +153,12 @@ const IdeModal: React.FC<IdeModalProps> = ({
           <div className="flex gap-2">
             <button
               onClick={handleSave}
-              className="px-4 py-2 rounded-lg font-medium transition-all bg-blue-600 text-white hover:bg-blue-700"
+              className="px-4 py-2 rounded-lg font-medium transition-all bg-blue-600 text-white hover:bg-blue-700 hover:cursor-pointer "
             >
               Save
             </button>
             <RunCodeButton />
-            <ExportCodeButton nodeTitle="" />
+            <ExportCodeButton nodeId={nodeId} nodeTitle={nodeTitle} />
           </div>
 
           {/* Center - Title */}
@@ -200,7 +200,12 @@ const IdeModal: React.FC<IdeModalProps> = ({
         {/* Editor Container */}
         <div className="flex-1 overflow-hidden">
           {isLoadingCode ? (
-            <div className="flex items-center justify-center h-full">
+            <div className="flex flex-col items-center justify-center h-full">
+              <img
+                src={"/aim-red.png"}
+                alt="Loading"
+                className="w-9 h-9 animate-spin-reverse mb-3"
+              />
               <div className="text-white">Loading code...</div>
             </div>
           ) : (

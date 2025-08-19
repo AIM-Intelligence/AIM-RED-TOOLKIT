@@ -79,17 +79,3 @@ async def save_node_code(request: SaveNodeCodeRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-# @router.post("/save")
-# async def save_code(request: SaveCodeRequest):
-#     try:
-#         result = save_project_code(
-#             project_hash=request.project_hash,
-#             project_title=request.project_title,
-#             node_id=request.node_id,
-#             node_title=request.node_title,
-#             code=request.code
-#         )
-#         return result
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=str(e))

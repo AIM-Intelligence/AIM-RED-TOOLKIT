@@ -35,7 +35,7 @@ const SaveStatusModal: React.FC<SaveStatusModalProps> = ({
             <span className="text-white text-lg mt-4">Saving...</span>
           </div>
         )}
-        
+
         {status === "success" && (
           <div className="flex flex-col items-center">
             <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center mb-4">
@@ -58,7 +58,7 @@ const SaveStatusModal: React.FC<SaveStatusModalProps> = ({
             </span>
           </div>
         )}
-        
+
         {status === "error" && (
           <div className="flex flex-col items-center">
             <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center mb-4">

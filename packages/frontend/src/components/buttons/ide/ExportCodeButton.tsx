@@ -2,7 +2,10 @@ import type { editor } from "monaco-editor";
 import { useRef } from "react";
 import type { ExportButtonProps } from "../props";
 
-export default function ExportCodeButton({ nodeTitle }: ExportButtonProps) {
+export default function ExportCodeButton({
+  nodeId,
+  nodeTitle,
+}: ExportButtonProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 
   const handleExportCode = () => {
@@ -12,7 +15,7 @@ export default function ExportCodeButton({ nodeTitle }: ExportButtonProps) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${nodeTitle.replace(/\s+/g, "_")}.py`;
+      a.download = `${nodeId}_${nodeTitle.replace(/\s+/g, "_")}.py`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -23,7 +26,7 @@ export default function ExportCodeButton({ nodeTitle }: ExportButtonProps) {
   return (
     <button
       onClick={handleExportCode}
-      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center gap-2"
+      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 hover:cursor-pointer transition-colors duration-200 flex items-center gap-2"
       aria-label="Export code"
     >
       <svg

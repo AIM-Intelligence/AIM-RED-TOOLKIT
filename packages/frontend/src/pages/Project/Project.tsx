@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Navigate } from "react-router-dom";
 import {
   ReactFlow,
   MiniMap,
@@ -21,58 +21,23 @@ import type { DefaultNodeType } from "../../components/nodes/DefaultNode";
 import DefaultNode from "../../components/nodes/DefaultNode";
 import DefaultEdge from "../../components/edges/DefaultEdge";
 import IdeModal from "../../components/modal/Ide";
+import { removeStyle } from "./removeStyle";
 
 export default function Project() {
-  const { projectTitle: projectTitle } = useParams<{ projectTitle: string }>();
+  const { projectTitle } = useParams<{ projectTitle: string }>();
+
   const [isIdeModalOpen, setIsIdeModalOpen] = useState(false);
   const [selectedNodeData, setSelectedNodeData] = useState<{
     nodeId: string;
     title: string;
-    code: string;
   }>({
     nodeId: "1",
     title: "Python IDE",
-    code: "# Write your Python code here\nprint('Hello, World!')",
   });
 
   useEffect(() => {
     const style = document.createElement("style");
-    style.textContent = `
-      .react-flow__renderer {
-        background-color: transparent !important;
-      }
-      .react-flow__background {
-        background-color: transparent !important;
-      }
-      .react-flow__pane {
-        background-color: transparent !important;
-      }
-      .react-flow-transparent {
-        background-color: transparent !important;
-      }
-      .react-flow-transparent .react-flow__renderer {
-        background-color: transparent !important;
-      }
-      /* 노드 선택 시 핑크색 테두리 완전 제거 */
-      .react-flow__node.selected {
-        box-shadow: none !important;
-      }
-      .react-flow__node-default {
-        background: transparent !important;
-        border: none !important;
-      }
-      /* 노드 선택 시 발생하는 모든 시각적 효과 제거 */
-      .react-flow__node.selected .react-flow__handle {
-        background: #555 !important;
-        border-color: #555 !important;
-      }
-      .react-flow__node:focus {
-        outline: none !important;
-      }
-      .react-flow__node:focus-visible {
-        outline: none !important;
-      }
-    `;
+    style.textContent = removeStyle;
     document.head.appendChild(style);
     return () => {
       document.head.removeChild(style);
@@ -83,43 +48,11 @@ export default function Project() {
     setSelectedNodeData({
       nodeId,
       title,
-      code: "# Write your Python code here\nprint('Hello, World!')",
     });
     setIsIdeModalOpen(true);
   };
 
-  const initialNodes: DefaultNodeType[] = [
-    {
-      id: "1",
-      type: "default",
-      position: { x: 100, y: 100 },
-      data: {
-        title: "Data Input",
-        description: "Load dataset from CSV",
-        viewCode: () => handleNodeClick("1", "Data Input"),
-      },
-    },
-    {
-      id: "2",
-      type: "default",
-      position: { x: 400, y: 100 },
-      data: {
-        title: "Preprocessing",
-        description: "Clean and normalize data",
-        viewCode: () => handleNodeClick("2", "Preprocessing"),
-      },
-    },
-    {
-      id: "3",
-      type: "default",
-      position: { x: 700, y: 100 },
-      data: {
-        title: "Model Training",
-        description: "Train ML model",
-        viewCode: () => handleNodeClick("3", "Model Training"),
-      },
-    },
-  ];
+  const initialNodes: DefaultNodeType[] = [];
 
   // 초기 엣지 설정 - type: "custom" 추가
   const initialEdges: Edge[] = [];
@@ -251,6 +184,10 @@ export default function Project() {
     return "#1e293b";
   };
 
+  if (!projectTitle) {
+    return <Navigate to="/project-not-exists" replace />;
+  }
+
   return (
     <div
       style={{ width: "100vw", height: "100vh", backgroundColor: "#0a0a0a" }}
@@ -324,7 +261,6 @@ export default function Project() {
         projectTitle={projectTitle}
         nodeId={selectedNodeData.nodeId}
         nodeTitle={selectedNodeData.title}
-        initialCode={selectedNodeData.code}
       />
     </div>
   );
