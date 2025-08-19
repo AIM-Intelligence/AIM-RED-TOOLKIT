@@ -23,7 +23,7 @@ import DefaultEdge from "../../components/edges/DefaultEdge";
 import IdeModal from "../../components/modal/Ide";
 
 export default function Project() {
-  const { projectId: projectHash } = useParams<{ projectId: string }>();
+  const { projectTitle: projectTitle } = useParams<{ projectTitle: string }>();
   const [isIdeModalOpen, setIsIdeModalOpen] = useState(false);
   const [selectedNodeData, setSelectedNodeData] = useState<{
     nodeId: string;
@@ -321,8 +321,7 @@ export default function Project() {
       <IdeModal
         isOpen={isIdeModalOpen}
         onClose={() => setIsIdeModalOpen(false)}
-        projectHash={projectHash || ""}
-        projectTitle="Project"
+        projectTitle={projectTitle}
         nodeId={selectedNodeData.nodeId}
         nodeTitle={selectedNodeData.title}
         initialCode={selectedNodeData.code}

@@ -1,2 +1,5 @@
 projects/*
 /projects
+
+app/__pycache__/*
+/app/__pycache__

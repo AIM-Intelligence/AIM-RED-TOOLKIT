@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import Editor from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import RunCodeButton from "../buttons/ide/RunCodeButton";
@@ -8,7 +8,6 @@ import SaveStatusModal from "./SaveStatusModal";
 interface IdeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  projectHash: string;
   projectTitle: string;
   nodeId: string;
   nodeTitle?: string;
@@ -18,7 +17,6 @@ interface IdeModalProps {
 const IdeModal: React.FC<IdeModalProps> = ({
   isOpen,
   onClose,
-  projectHash,
   projectTitle,
   nodeId,
   nodeTitle = "Python IDE",
@@ -26,32 +24,70 @@ const IdeModal: React.FC<IdeModalProps> = ({
 }) => {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"loading" | "success" | "error">("loading");
+  const [saveStatus, setSaveStatus] = useState<"loading" | "success" | "error">(
+    "loading"
+  );
+  const [code, setCode] = useState(initialCode);
+  const [isLoadingCode, setIsLoadingCode] = useState(false);
 
-  const handleSave = async () => {
-    if (!editorRef.current) return;
-    
-    setSaveModalOpen(true);
-    setSaveStatus("loading");
-    const code = editorRef.current.getValue();
-    
+  // Fetch code from backend when modal opens
+  const fetchCode = useCallback(async () => {
+    if (!projectTitle || !nodeId) return;
+
+    setIsLoadingCode(true);
     try {
-      const response = await fetch("http://localhost:8000/api/save-code", {
+      const response = await fetch("http://localhost:8000/api/code/getcode", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          project_hash: projectHash,
-          project_title: projectTitle,
+          project_name: projectTitle,
           node_id: nodeId,
           node_title: nodeTitle,
-          code: code,
         }),
       });
-      
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.code) {
+          setCode(data.code);
+          if (editorRef.current) {
+            editorRef.current.setValue(data.code);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching code:", error);
+    } finally {
+      setIsLoadingCode(false);
+    }
+  }, [projectTitle, nodeId, nodeTitle]);
+
+  const handleSave = async () => {
+    if (!editorRef.current) return;
+
+    setSaveModalOpen(true);
+    setSaveStatus("loading");
+    const currentCode = editorRef.current.getValue();
+
+    try {
+      const response = await fetch("http://localhost:8000/api/code/savecode", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          project_name: projectTitle,
+          node_id: nodeId,
+          node_title: nodeTitle,
+          code: currentCode,
+        }),
+      });
+
       if (response.ok) {
         setSaveStatus("success");
+        setCode(currentCode);
       } else {
         setSaveStatus("error");
       }
@@ -60,6 +96,13 @@ const IdeModal: React.FC<IdeModalProps> = ({
       setSaveStatus("error");
     }
   };
+
+  // Fetch code when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchCode();
+    }
+  }, [isOpen, nodeId, fetchCode]);
 
   useEffect(() => {
     if (isOpen) {
@@ -156,36 +199,43 @@ const IdeModal: React.FC<IdeModalProps> = ({
 
         {/* Editor Container */}
         <div className="flex-1 overflow-hidden">
-          <Editor
-            height="100%"
-            defaultLanguage="python"
-            defaultValue={initialCode}
-            theme="vs-dark"
-            onMount={handleEditorDidMount}
-            options={{
-              minimap: { enabled: true },
-              fontSize: 14,
-              lineNumbers: "on",
-              roundedSelection: false,
-              scrollBeyondLastLine: false,
-              readOnly: false,
-              automaticLayout: true,
-              wordWrap: "on",
-              scrollbar: {
-                vertical: "visible",
-                horizontal: "visible",
-                verticalScrollbarSize: 10,
-                horizontalScrollbarSize: 10,
-              },
-              padding: {
-                top: 10,
-                bottom: 10,
-              },
-            }}
-          />
+          {isLoadingCode ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-white">Loading code...</div>
+            </div>
+          ) : (
+            <Editor
+              height="100%"
+              defaultLanguage="python"
+              value={code}
+              theme="vs-dark"
+              onMount={handleEditorDidMount}
+              onChange={(value) => setCode(value || "")}
+              options={{
+                minimap: { enabled: true },
+                fontSize: 14,
+                lineNumbers: "on",
+                roundedSelection: false,
+                scrollBeyondLastLine: false,
+                readOnly: false,
+                automaticLayout: true,
+                wordWrap: "on",
+                scrollbar: {
+                  vertical: "visible",
+                  horizontal: "visible",
+                  verticalScrollbarSize: 10,
+                  horizontalScrollbarSize: 10,
+                },
+                padding: {
+                  top: 10,
+                  bottom: 10,
+                },
+              }}
+            />
+          )}
         </div>
       </div>
-      
+
       {/* Save Status Modal */}
       <SaveStatusModal
         isOpen={saveModalOpen}

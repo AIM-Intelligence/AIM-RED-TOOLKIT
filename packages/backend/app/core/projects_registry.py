@@ -1,0 +1,81 @@
+import json
+from pathlib import Path
+from typing import List, Dict, Any
+
+PROJECTS_BASE_PATH = Path("projects")
+PROJECTS_REGISTRY_FILE = PROJECTS_BASE_PATH / "projects.json"
+
+def ensure_projects_registry() -> None:
+    """Ensure the projects.json file exists with proper structure"""
+    PROJECTS_BASE_PATH.mkdir(exist_ok=True)
+    
+    if not PROJECTS_REGISTRY_FILE.exists():
+        initial_registry = {
+            "projects": []
+        }
+        with open(PROJECTS_REGISTRY_FILE, 'w') as f:
+            json.dump(initial_registry, f, indent=2)
+
+def get_projects_registry() -> Dict[str, Any]:
+    """Get the entire projects registry"""
+    ensure_projects_registry()
+    
+    with open(PROJECTS_REGISTRY_FILE, 'r') as f:
+        return json.load(f)
+
+def save_projects_registry(registry: Dict[str, Any]) -> None:
+    """Save the projects registry"""
+    ensure_projects_registry()
+    
+    with open(PROJECTS_REGISTRY_FILE, 'w') as f:
+        json.dump(registry, f, indent=2)
+
+def add_project_to_registry(project_name: str, project_description: str) -> None:
+    """Add a project to the registry"""
+    registry = get_projects_registry()
+    
+    # Check if project already exists
+    for project in registry["projects"]:
+        if project["project_name"] == project_name:
+            raise ValueError(f"Project '{project_name}' already exists in registry")
+    
+    # Add new project
+    registry["projects"].append({
+        "project_name": project_name,
+        "project_description": project_description
+    })
+    
+    save_projects_registry(registry)
+
+def remove_project_from_registry(project_name: str) -> None:
+    """Remove a project from the registry"""
+    registry = get_projects_registry()
+    
+    # Find and remove project
+    original_length = len(registry["projects"])
+    registry["projects"] = [
+        p for p in registry["projects"] 
+        if p["project_name"] != project_name
+    ]
+    
+    if len(registry["projects"]) == original_length:
+        raise ValueError(f"Project '{project_name}' not found in registry")
+    
+    save_projects_registry(registry)
+
+def update_project_in_registry(project_name: str, project_description: str) -> None:
+    """Update a project's description in the registry"""
+    registry = get_projects_registry()
+    
+    # Find and update project
+    found = False
+    for project in registry["projects"]:
+        if project["project_name"] == project_name:
+            project["project_description"] = project_description
+            found = True
+            break
+    
+    if not found:
+        raise ValueError(f"Project '{project_name}' not found in registry")
+    
+    save_projects_registry(registry)

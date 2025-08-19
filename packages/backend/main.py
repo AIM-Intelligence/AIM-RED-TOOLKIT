@@ -1,54 +1,24 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import os
-from pathlib import Path
+from app.api import health, code, project
 
-app = FastAPI()
+app = FastAPI(title="AIM Red Toolkit Backend", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://frontend:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class SaveCodeRequest(BaseModel):
-    project_hash: str
-    project_title: str
-    node_id: str
-    node_title: str
-    code: str
+@app.get("/")
+async def root():
+    return {"message": "AIM Red Toolkit Backend API", "status": "healthy"}
 
-@app.get("/api/healthcheck")
-async def healthcheck():
-    return {"status": "healthy"}
-
-@app.post("/api/save-code")
-async def save_code(request: SaveCodeRequest):
-    try:
-        projects_dir = Path("projects")
-        projects_dir.mkdir(exist_ok=True)
-        
-        project_dir = projects_dir / request.project_hash
-        project_dir.mkdir(exist_ok=True)
-        
-        filename = f"{request.project_title}-{request.node_id}-{request.node_title}.py"
-        filename = filename.replace(" ", "_").replace("/", "_")
-        
-        file_path = project_dir / filename
-        
-        with open(file_path, "w") as f:
-            f.write(request.code)
-        
-        return {
-            "success": True,
-            "message": f"Code saved successfully",
-            "file_path": str(file_path)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+app.include_router(health.router, prefix="/api")
+app.include_router(code.router, prefix="/api/code")
+app.include_router(project.router, prefix="/api/project")
 
 if __name__ == "__main__":
     import uvicorn
