@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from ..core.execute_code import execute_python_code
 from ..core import node_operations
+from ..core.pipeline_executor import execute_pipeline
 
 router = APIRouter()
 
@@ -77,5 +78,18 @@ async def save_node_code(request: SaveNodeCodeRequest):
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class PipelineExecutionRequest(BaseModel):
+    project_id: str
+    use_pickle: Optional[bool] = True  # 항상 객체 전달 사용 (기본값)
+
+@router.post("/execute-pipeline")
+async def execute_pipeline_endpoint(request: PipelineExecutionRequest):
+    """Execute all nodes in a pipeline following edge connections"""
+    try:
+        result = execute_pipeline(request.project_id, use_pickle=request.use_pickle)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

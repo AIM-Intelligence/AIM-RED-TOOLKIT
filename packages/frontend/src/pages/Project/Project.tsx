@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   ReactFlow,
   MiniMap,
@@ -19,11 +19,18 @@ import {
 import "@xyflow/react/dist/style.css";
 import type { DefaultNodeType } from "../../components/nodes/DefaultNode";
 import DefaultNode from "../../components/nodes/DefaultNode";
+import type { NumberParamNodeType } from "../../components/nodes/params/NumberParamNode";
+import NumberParamNode from "../../components/nodes/params/NumberParamNode";
+import type { CustomCalculatorNodeType } from "../../components/nodes/CustomCalculatorNode";
+import CustomCalculatorNode from "../../components/nodes/CustomCalculatorNode";
+import type { SimpleAddNodeType } from "../../components/nodes/SimpleAddNode";
+import SimpleAddNode from "../../components/nodes/SimpleAddNode";
 import DefaultEdge from "../../components/edges/DefaultEdge";
 import IdeModal from "../../components/modal/Ide";
 import { removeStyle } from "./removeStyle";
 import Loading from "../../components/loading/Loading";
 import WrongPath from "../WrongPath/WrongPath";
+import RunPipelineButton from "../../components/buttons/RunPipelineButton";
 
 // Backend API response types
 interface BackendNodeData {
@@ -64,6 +71,7 @@ interface ProjectApiResponse {
 
 export default function Project() {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
 
   const [isIdeModalOpen, setIsIdeModalOpen] = useState(false);
   const [selectedNodeData, setSelectedNodeData] = useState<{
@@ -82,9 +90,10 @@ export default function Project() {
   const initialNodes: DefaultNodeType[] = [];
   const initialEdges: Edge[] = [];
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [nodes, setNodes, onNodesChangeBase] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  const [nodeIdCounter, setNodeIdCounter] = useState(4);
+  const [nodeIdCounter, setNodeIdCounter] = useState(1);
+  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const style = document.createElement("style");
@@ -94,6 +103,35 @@ export default function Project() {
       document.head.removeChild(style);
     };
   }, []);
+
+  // Listen for updateNodeData events from NumberParamNode
+  useEffect(() => {
+    const handleUpdateNodeData = (event: any) => {
+      const { id, data } = event.detail;
+      setNodes((nds) =>
+        nds.map((node) => {
+          if (node.id === id) {
+            const updatedNode = { ...node, data };
+            // Auto-save after node data update
+            if (saveTimeout) {
+              clearTimeout(saveTimeout);
+            }
+            const newTimeout = setTimeout(() => {
+              saveProjectStructure(nodes.map(n => n.id === id ? updatedNode : n), edges);
+            }, 500); // Save after 500ms
+            setSaveTimeout(newTimeout);
+            return updatedNode;
+          }
+          return node;
+        })
+      );
+    };
+
+    document.addEventListener("updateNodeData", handleUpdateNodeData);
+    return () => {
+      document.removeEventListener("updateNodeData", handleUpdateNodeData);
+    };
+  }, [setNodes, edges, nodes, saveTimeout]);
 
   // Fetch project data from backend
   useEffect(() => {
@@ -131,23 +169,93 @@ export default function Project() {
           setProjectTitle(project.project_name || "");
 
           // Transform backend nodes to ReactFlow format
-          const transformedNodes: DefaultNodeType[] = project.nodes.map(
-            (node: BackendNode) => ({
-              id: node.id,
-              type: node.type || "default",
-              position: node.position,
-              data: {
-                title: node.data.title || `Node ${node.id}`,
-                description: node.data.description || "",
-                viewCode: () => {
-                  setSelectedNodeData({
-                    nodeId: node.id,
+          const transformedNodes: (DefaultNodeType | NumberParamNodeType | CustomCalculatorNodeType | SimpleAddNodeType)[] = project.nodes.map(
+            (node: BackendNode) => {
+              if (node.type === "numberParam") {
+                // For NumberParam nodes, provide all required data
+                return {
+                  id: node.id,
+                  type: "numberParam",
+                  position: node.position,
+                  data: {
+                    title: node.data.title || `Number Param ${node.id}`,
+                    description: node.data.description || "Number parameter",
+                    paramName: `param_${node.id}`,
+                    paramLabel: node.data.title || `Parameter ${node.id}`,
+                    paramDescription: node.data.description || "Number value parameter",
+                    value: 0.00,
+                    minValue: null,
+                    maxValue: null,
+                    step: 1,
+                    unit: "",
+                    precision: 2,
+                    integerOnly: false,
+                    viewCode: () => {
+                      setSelectedNodeData({
+                        nodeId: node.id,
+                        title: node.data.title || `Number Param ${node.id}`,
+                      });
+                      setIsIdeModalOpen(true);
+                    },
+                  },
+                } as NumberParamNodeType;
+              } else if (node.type === "customCalculator") {
+                // For CustomCalculator nodes
+                return {
+                  id: node.id,
+                  type: "customCalculator",
+                  position: node.position,
+                  data: {
+                    title: node.data.title || `Calculator ${node.id}`,
+                    description: node.data.description || "Calculates values from inputs",
+                    operation: "add" as const,
+                    viewCode: () => {
+                      setSelectedNodeData({
+                        nodeId: node.id,
+                        title: node.data.title || `Calculator ${node.id}`,
+                      });
+                      setIsIdeModalOpen(true);
+                    },
+                  },
+                } as CustomCalculatorNodeType;
+              } else if (node.type === "simpleAdd") {
+                // For SimpleAdd nodes
+                return {
+                  id: node.id,
+                  type: "simpleAdd",
+                  position: node.position,
+                  data: {
+                    title: node.data.title || `Add ${node.id}`,
+                    description: node.data.description || "Simple addition: a + b",
+                    viewCode: () => {
+                      setSelectedNodeData({
+                        nodeId: node.id,
+                        title: node.data.title || `Add ${node.id}`,
+                      });
+                      setIsIdeModalOpen(true);
+                    },
+                  },
+                } as SimpleAddNodeType;
+              } else {
+                // Default node type
+                return {
+                  id: node.id,
+                  type: node.type || "default",
+                  position: node.position,
+                  data: {
                     title: node.data.title || `Node ${node.id}`,
-                  });
-                  setIsIdeModalOpen(true);
-                },
-              },
-            })
+                    description: node.data.description || "",
+                    viewCode: () => {
+                      setSelectedNodeData({
+                        nodeId: node.id,
+                        title: node.data.title || `Node ${node.id}`,
+                      });
+                      setIsIdeModalOpen(true);
+                    },
+                  },
+                } as DefaultNodeType;
+              }
+            }
           );
 
           // Transform backend edges to ReactFlow format
@@ -179,6 +287,8 @@ export default function Project() {
               ...project.nodes.map((n: BackendNode) => parseInt(n.id, 10) || 0)
             );
             setNodeIdCounter(maxId + 1);
+          } else {
+            setNodeIdCounter(1);
           }
         }
       } catch (err) {
@@ -207,10 +317,108 @@ export default function Project() {
     setIsIdeModalOpen(true);
   };
 
+  // Save project structure to backend
+  // Custom onNodesChange handler that auto-saves
+  const onNodesChange = useCallback((changes: any) => {
+    onNodesChangeBase(changes);
+    
+    // Check if any NumberParam node data changed
+    const hasDataChange = changes.some((change: any) => 
+      change.type === 'dimensions' || 
+      (change.type === 'select' && change.selected !== undefined)
+    );
+    
+    if (!hasDataChange) {
+      // Clear existing timeout
+      if (saveTimeout) {
+        clearTimeout(saveTimeout);
+      }
+      
+      // Set new timeout for auto-save (debounced)
+      const newTimeout = setTimeout(() => {
+        saveProjectStructure(nodes, edges);
+      }, 1000); // Save after 1 second of no changes
+      
+      setSaveTimeout(newTimeout);
+    }
+  }, [onNodesChangeBase, nodes, edges, saveTimeout]);
+
+  const saveProjectStructure = async (currentNodes: any[], currentEdges: any[]) => {
+    try {
+      // Filter out only necessary data for backend
+      const backendNodes = currentNodes.map(node => {
+        // For NumberParam nodes, include all data
+        if (node.type === 'numberParam') {
+          return {
+            id: node.id,
+            type: node.type,
+            position: node.position,
+            data: {
+              title: node.data.title,
+              description: node.data.description,
+              file: node.data.file || `${node.id}_${node.data.title?.replace(/\s+/g, '_')}.py`,
+              // Include NumberParam specific data
+              paramName: node.data.paramName,
+              paramLabel: node.data.paramLabel,
+              paramDescription: node.data.paramDescription,
+              value: node.data.value,
+              minValue: node.data.minValue,
+              maxValue: node.data.maxValue,
+              step: node.data.step,
+              unit: node.data.unit,
+              precision: node.data.precision,
+              integerOnly: node.data.integerOnly
+            }
+          };
+        }
+        // For other nodes, just basic data
+        return {
+          id: node.id,
+          type: node.type,
+          position: node.position,
+          data: {
+            title: node.data.title,
+            description: node.data.description,
+            file: node.data.file || `${node.id}_${node.data.title?.replace(/\s+/g, '_')}.py`
+          }
+        };
+      });
+
+      const backendEdges = currentEdges.map(edge => ({
+        id: edge.id,
+        type: edge.type || "custom",
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle || null,
+        targetHandle: edge.targetHandle || null
+      }));
+
+      console.log("Saving project structure with edges:", backendEdges);
+
+      const response = await fetch(`/api/project/save/${projectId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nodes: backendNodes,
+          edges: backendEdges,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error("Failed to save project structure:", await response.text());
+      }
+    } catch (error) {
+      console.error("Error saving project structure:", error);
+    }
+  };
+
   // 노드 타입 정의
   const nodeTypes = useMemo<NodeTypes>(
     () => ({
       default: DefaultNode,
+      numberParam: NumberParamNode,
+      customCalculator: CustomCalculatorNode,
+      simpleAdd: SimpleAddNode,
     }),
     []
   );
@@ -253,51 +461,427 @@ export default function Project() {
         return;
       }
 
+      const newEdge = {
+        ...connection,
+        id: `e${connection.source}-${connection.target}-${Date.now()}`,
+        type: "custom",
+        style: { stroke: "#64748b", strokeWidth: 2 },
+        markerEnd: { type: MarkerType.ArrowClosed },
+      };
+
       // addEdge 함수 사용 - type: "custom" 추가
-      setEdges((eds) =>
-        addEdge(
-          {
-            ...connection,
-            id: `e${connection.source}-${connection.target}-${Date.now()}`,
-            type: "custom",
-            style: { stroke: "#64748b", strokeWidth: 2 },
-            markerEnd: { type: MarkerType.ArrowClosed },
-          },
-          eds
-        )
-      );
+      setEdges((eds) => {
+        const newEdges = addEdge(newEdge, eds);
+        // Save project structure with new edges
+        saveProjectStructure(nodes, newEdges);
+        return newEdges;
+      });
     },
-    [edges, setEdges]
+    [edges, setEdges, nodes]
   );
 
   // 새 노드 추가
-  const addNewNode = useCallback(() => {
+  const addNewNode = useCallback(async (nodeType: "default" | "numberParam" | "customCalculator" | "simpleAdd" = "default") => {
     const nodeId = nodeIdCounter.toString();
-    const newNode: DefaultNodeType = {
-      id: nodeId,
-      type: "default",
-      position: {
-        x: Math.random() * 500 + 100,
-        y: Math.random() * 300 + 100,
-      },
-      data: {
-        title: `Node ${nodeIdCounter}`,
-        description: "New node description",
-        viewCode: () => handleNodeClick(nodeId, `Node ${nodeIdCounter}`),
-      },
-    };
-    setNodes((nds) => [...nds, newNode]);
+    
+    if (nodeType === "numberParam") {
+      const newNode: NumberParamNodeType = {
+        id: nodeId,
+        type: "numberParam",
+        position: {
+          x: Math.random() * 500 + 100,
+          y: Math.random() * 300 + 100,
+        },
+        data: {
+          title: `Number Param ${nodeIdCounter}`,
+          description: "Number parameter",
+          paramName: `param_${nodeIdCounter}`,
+          paramLabel: `Parameter ${nodeIdCounter}`,
+          paramDescription: "Configure this number parameter",
+          value: 0.00,
+          minValue: null,
+          maxValue: null,
+          step: 1,
+          unit: "",
+          precision: 2,
+          integerOnly: false,
+          currentValue: 0,
+          viewCode: () => handleNodeClick(nodeId, `Number Param ${nodeIdCounter}`),
+        },
+      };
+      setNodes((nds) => [...nds, newNode as any]);
+      
+      // First, create the node in backend
+      try {
+        const createNodeResponse = await fetch("/api/project/makenode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            node_id: nodeId,
+            node_type: "numberParam",
+            position: newNode.position,
+            data: {
+              title: newNode.data.title,
+              description: newNode.data.description,
+            },
+          }),
+        });
+        
+        if (!createNodeResponse.ok) {
+          console.error("Failed to create node in backend");
+        }
+        
+        // Then save the code
+        const code = `"""
+NumberValue Parameter Node
+This node creates a NumberValue parameter that can be passed to other nodes
+"""
+
+from aim_params import NumberValue
+from aim_params.core.metadata import UIMetadata
+
+# Parameter configuration
+param_name = "${newNode.data.paramName}"
+param_label = "${newNode.data.paramLabel}"
+param_description = "${newNode.data.paramDescription}"
+value = ${newNode.data.value}
+min_value = ${newNode.data.minValue === null ? 'None' : newNode.data.minValue}
+max_value = ${newNode.data.maxValue === null ? 'None' : newNode.data.maxValue}
+step = ${newNode.data.step}
+unit = "${newNode.data.unit}"
+precision = ${newNode.data.precision}
+integer_only = ${newNode.data.integerOnly ? "True" : "False"}
+
+# Create NumberValue parameter
+param = NumberValue(
+    name=param_name,
+    ui_metadata=UIMetadata(
+        label=param_label,
+        description=param_description,
+        default=value,
+        required=True,
+        editable=True
+    ),
+    value=value,
+    min_value=min_value if min_value is not None else None,
+    max_value=max_value if max_value is not None else None,
+    step=step if step > 0 else None,
+    unit=unit if unit else None,
+    precision=precision if precision >= 0 else None,
+    integer_only=integer_only
+)
+
+# Display parameter info
+print(f"Created NumberValue parameter: {param_name}")
+print(f"  Label: {param_label}")
+print(f"  Value: {param.format_display()}")
+print(f"  Range: {min_value} - {max_value}")
+print(f"  Integer only: {integer_only}")
+
+# Pass parameter to next nodes
+output_data = {
+    "parameter": param,
+    "name": param_name,
+    "value": param.value,
+    "metadata": {
+        "type": "NumberValue",
+        "min": min_value,
+        "max": max_value,
+        "step": step,
+        "unit": unit,
+        "integer_only": integer_only
+    }
+}`;
+        
+        await fetch("/api/code/savecode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            node_id: nodeId,
+            code: code,
+          }),
+        });
+      } catch (error) {
+        console.error("Error saving node code:", error);
+      }
+    } else if (nodeType === "customCalculator") {
+      const newNode: CustomCalculatorNodeType = {
+        id: nodeId,
+        type: "customCalculator",
+        position: {
+          x: Math.random() * 500 + 100,
+          y: Math.random() * 300 + 100,
+        },
+        data: {
+          title: `Calculator ${nodeIdCounter}`,
+          description: "Calculates values from inputs",
+          operation: "add",
+          viewCode: () => handleNodeClick(nodeId, `Calculator ${nodeIdCounter}`),
+        },
+      };
+      setNodes((nds) => [...nds, newNode as any]);
+      
+      // Create node in backend
+      try {
+        const createNodeResponse = await fetch("/api/project/makenode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            node_id: nodeId,
+            node_type: "customCalculator",
+            position: newNode.position,
+            data: {
+              title: newNode.data.title,
+              description: newNode.data.description,
+            },
+          }),
+        });
+        
+        if (!createNodeResponse.ok) {
+          console.error("Failed to create node in backend");
+        }
+        
+        // Save the calculator code
+        const code = `"""
+Custom Calculator Node
+This node receives two number parameters and performs a calculation
+"""
+
+# input_data is already provided by the pipeline executor
+# It contains data from all connected nodes
+
+print("Received input_data:", input_data)
+
+# Extract values from connected NumberParam nodes
+values = []
+for node_key, data in input_data.items():
+    if isinstance(data, dict) and 'parameter' in data:
+        # This is a NumberValue parameter object
+        param = data['parameter']
+        # Access the value attribute of the parameter
+        if hasattr(param, 'value'):
+            values.append(param.value)
+            print(f"Received parameter value: {param.value}")
+    elif isinstance(data, dict) and 'value' in data:
+        # Direct value from node
+        values.append(data['value'])
+        print(f"Received direct value: {data['value']}")
+
+# Perform calculation
+if len(values) >= 2:
+    val1, val2 = values[0], values[1]
+    result = val1 + val2
+    print(f"\nCalculation: {val1} + {val2} = {result}")
+else:
+    result = 0
+    print(f"Not enough inputs. Need 2 values, got {len(values)}")
+
+# Pass the result to next nodes
+output_data = {
+    "result": result,
+    "operation": "add",
+    "inputs": values
+}
+
+print(f"\nOutput: {output_data}")`;
+        
+        await fetch("/api/code/savecode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            node_id: nodeId,
+            code: code,
+          }),
+        });
+      } catch (error) {
+        console.error("Error saving node code:", error);
+      }
+    } else if (nodeType === "simpleAdd") {
+      const newNode: SimpleAddNodeType = {
+        id: nodeId,
+        type: "simpleAdd",
+        position: {
+          x: Math.random() * 500 + 100,
+          y: Math.random() * 300 + 100,
+        },
+        data: {
+          title: `Add ${nodeIdCounter}`,
+          description: "Simple addition: a + b",
+          viewCode: () => handleNodeClick(nodeId, `Add ${nodeIdCounter}`),
+        },
+      };
+      setNodes((nds) => [...nds, newNode as any]);
+      
+      // Create node in backend
+      try {
+        const createNodeResponse = await fetch("/api/project/makenode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            node_id: nodeId,
+            node_type: "simpleAdd",
+            position: newNode.position,
+            data: {
+              title: newNode.data.title,
+              description: newNode.data.description,
+            },
+          }),
+        });
+        
+        if (!createNodeResponse.ok) {
+          console.error("Failed to create node in backend");
+        }
+        
+        // Save the super simple add code
+        const code = `# Simple Add Node - with automatic deserialization
+
+# Get inputs 'a' and 'b' - they are already deserialized
+a_data = input_data.get('a', {})
+b_data = input_data.get('b', {})
+
+# Extract values from NumberParam objects
+a = 0
+b = 0
+
+if isinstance(a_data, dict):
+    if 'parameter' in a_data:
+        # It's a parameter object
+        param = a_data['parameter']
+        if hasattr(param, 'value'):
+            a = param.value
+    elif 'value' in a_data:
+        a = a_data['value']
+
+if isinstance(b_data, dict):
+    if 'parameter' in b_data:
+        # It's a parameter object
+        param = b_data['parameter']
+        if hasattr(param, 'value'):
+            b = param.value
+    elif 'value' in b_data:
+        b = b_data['value']
+
+# Simple addition!
+result = a + b
+
+print("=== RESULT ===")
+print(f"a = {a}")
+print(f"b = {b}")
+print(f"a + b = {result}")
+
+# Output
+output_data = {"value": result}`;
+        
+        await fetch("/api/code/savecode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            node_id: nodeId,
+            code: code,
+          }),
+        });
+      } catch (error) {
+        console.error("Error saving node code:", error);
+      }
+    } else {
+      const newNode: DefaultNodeType = {
+        id: nodeId,
+        type: "default",
+        position: {
+          x: Math.random() * 500 + 100,
+          y: Math.random() * 300 + 100,
+        },
+        data: {
+          title: `Node ${nodeIdCounter}`,
+          description: "New node description",
+          viewCode: () => handleNodeClick(nodeId, `Node ${nodeIdCounter}`),
+        },
+      };
+      setNodes((nds) => [...nds, newNode]);
+      
+      // Create node in backend
+      try {
+        const createNodeResponse = await fetch("/api/project/makenode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            node_id: nodeId,
+            node_type: "default",
+            position: newNode.position,
+            data: {
+              title: newNode.data.title,
+              description: newNode.data.description,
+            },
+          }),
+        });
+        
+        if (!createNodeResponse.ok) {
+          console.error("Failed to create node in backend");
+        }
+        
+        // Save initial code for default node
+        const defaultCode = `# ${newNode.data.title}
+# ${newNode.data.description}
+
+# Write your Python code here
+print("Hello from ${newNode.data.title}")
+
+# Pass data to next nodes
+output_data = {}`;
+        
+        await fetch("/api/code/savecode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            node_id: nodeId,
+            code: defaultCode,
+          }),
+        });
+      } catch (error) {
+        console.error("Error creating default node:", error);
+      }
+    }
+    
     setNodeIdCounter((id) => id + 1);
-  }, [nodeIdCounter, setNodes]);
+  }, [nodeIdCounter, setNodes, projectId]);
 
   // 노드 삭제 핸들러
   useEffect(() => {
-    const handleDeleteNode = (event: CustomEvent) => {
+    const handleDeleteNode = async (event: CustomEvent) => {
       const nodeId = event.detail.id;
-      setNodes((nds) => nds.filter((node) => node.id !== nodeId));
-      setEdges((eds) =>
-        eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
-      );
+      
+      // Delete from backend
+      try {
+        await fetch("/api/project/deletenode", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            node_id: nodeId,
+          }),
+        });
+        
+        // Update local state
+        setNodes((nds) => {
+          const updatedNodes = nds.filter((node) => node.id !== nodeId);
+          // Save project structure
+          saveProjectStructure(updatedNodes, edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+          return updatedNodes;
+        });
+        setEdges((eds) =>
+          eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
+        );
+      } catch (error) {
+        console.error("Error deleting node:", error);
+      }
     };
 
     document.addEventListener("deleteNode", handleDeleteNode as EventListener);
@@ -307,13 +891,34 @@ export default function Project() {
         handleDeleteNode as EventListener
       );
     };
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, projectId, edges]);
 
   // Edge 삭제 핸들러 - 추가
   useEffect(() => {
-    const handleDeleteEdge = (event: CustomEvent) => {
+    const handleDeleteEdge = async (event: CustomEvent) => {
       const edgeId = event.detail.id;
-      setEdges((eds) => eds.filter((edge) => edge.id !== edgeId));
+      
+      // Delete from backend
+      try {
+        await fetch("/api/project/deleteedge", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            edge_id: edgeId,
+          }),
+        });
+        
+        // Update local state
+        setEdges((eds) => {
+          const updatedEdges = eds.filter((edge) => edge.id !== edgeId);
+          // Save project structure
+          saveProjectStructure(nodes, updatedEdges);
+          return updatedEdges;
+        });
+      } catch (error) {
+        console.error("Error deleting edge:", error);
+      }
     };
 
     document.addEventListener("deleteEdge", handleDeleteEdge as EventListener);
@@ -323,7 +928,47 @@ export default function Project() {
         handleDeleteEdge as EventListener
       );
     };
-  }, [setEdges]);
+  }, [setEdges, projectId, nodes]);
+
+  // 노드 데이터 업데이트 핸들러
+  useEffect(() => {
+    const handleUpdateNodeData = async (event: CustomEvent) => {
+      const { id, data } = event.detail;
+      setNodes((nds) => 
+        nds.map((node) => 
+          node.id === id ? { ...node, data: { ...node.data, ...data } } : node
+        )
+      );
+      
+      // Save project structure to backend
+      try {
+        const updatedNodes = nodes.map((node) => 
+          node.id === id ? { ...node, data: { ...node.data, ...data } } : node
+        );
+        
+        await fetch(`/api/project/save/${projectId}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            nodes: updatedNodes,
+            edges: edges,
+          }),
+        });
+      } catch (error) {
+        console.error("Failed to save project structure:", error);
+      }
+    };
+
+    document.addEventListener("updateNodeData", handleUpdateNodeData as EventListener);
+    return () => {
+      document.removeEventListener(
+        "updateNodeData",
+        handleUpdateNodeData as EventListener
+      );
+    };
+  }, [setNodes, nodes, edges, projectId]);
 
   // MiniMap 노드 색상 함수
   const nodeColor = () => {
@@ -425,13 +1070,39 @@ export default function Project() {
           className="bg-gray-800 p-4 rounded-lg border border-gray-700"
         >
           <div className="flex gap-3 items-center">
-            <h1>{projectTitle}</h1>
             <button
-              onClick={addNewNode}
+              onClick={() => navigate("/")}
+              className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm font-medium"
+              title="Back to Projects"
+            >
+              ← Projects
+            </button>
+            <h1 className="text-white font-bold">{projectTitle}</h1>
+            <button
+              onClick={() => addNewNode("default")}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium"
             >
               + Add Node
             </button>
+            <button
+              onClick={() => addNewNode("numberParam")}
+              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors text-sm font-medium"
+            >
+              + Number Param
+            </button>
+            <button
+              onClick={() => addNewNode("customCalculator")}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium"
+            >
+              + Calculator
+            </button>
+            <button
+              onClick={() => addNewNode("simpleAdd")}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm font-medium"
+            >
+              + Add
+            </button>
+            <RunPipelineButton projectId={projectId} />
             <div className="text-gray-400 text-sm">
               Nodes: {nodes.length} | Edges: {edges.length}
             </div>

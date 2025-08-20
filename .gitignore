@@ -7,3 +7,5 @@ node_modules
 
 CLAUDE.md
 CLAUDE.local.md
+
+venv/ 

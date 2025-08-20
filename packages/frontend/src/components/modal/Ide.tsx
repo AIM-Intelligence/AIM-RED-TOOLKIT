@@ -31,7 +31,6 @@ const IdeModal: React.FC<IdeModalProps> = ({
   );
   const [code, setCode] = useState(initialCode);
   const [isLoadingCode, setIsLoadingCode] = useState(false);
-  console.log(projectTitle);
 
   // Fetch code from backend when modal opens
   const fetchCode = useCallback(async () => {
@@ -61,7 +60,7 @@ const IdeModal: React.FC<IdeModalProps> = ({
         }
       }
     } catch (error) {
-      console.error("Error fetching code:", error);
+      // Silently handle error
     } finally {
       setIsLoadingCode(false);
     }
@@ -95,7 +94,6 @@ const IdeModal: React.FC<IdeModalProps> = ({
         setSaveStatus("error");
       }
     } catch (error) {
-      console.error("Error saving code:", error);
       setSaveStatus("error");
     }
   };
@@ -160,7 +158,7 @@ const IdeModal: React.FC<IdeModalProps> = ({
             >
               Save
             </button>
-            <RunCodeButton />
+            <RunCodeButton editorRef={editorRef} />
             <ExportCodeButton
               nodeId={nodeId}
               nodeTitle={nodeTitle}
