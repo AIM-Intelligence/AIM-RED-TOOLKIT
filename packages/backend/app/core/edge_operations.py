@@ -1,11 +1,11 @@
 from typing import Dict, Any, Optional
 
-def create_edge(project_name: str, edge_id: str, edge_type: str, source: str, target: str, 
+def create_edge(project_id: str, edge_id: str, edge_type: str, source: str, target: str, 
                 marker_end: Optional[Dict] = None, **kwargs) -> Dict[str, Any]:
     """Create a new edge between nodes matching React Flow structure"""
     from .project_structure import get_project_structure, save_project_structure
     
-    structure = get_project_structure(project_name)
+    structure = get_project_structure(project_id)
     
     # Verify source and target nodes exist
     node_ids = [node['id'] for node in structure['nodes']]
@@ -23,21 +23,26 @@ def create_edge(project_name: str, edge_id: str, edge_type: str, source: str, ta
         "id": edge_id,
         "type": edge_type,
         "source": source,
-        "target": target
+        "target": target,
+        "sourceHandle": None,  # Explicitly set to None for ReactFlow compatibility
+        "targetHandle": None   # Explicitly set to None for ReactFlow compatibility
     }
     
     # Add markerEnd if provided
     if marker_end:
         new_edge["markerEnd"] = marker_end
+    else:
+        # Default markerEnd for ReactFlow (use exact string that ReactFlow expects)
+        new_edge["markerEnd"] = {"type": "arrowclosed"}
     
     # Add any additional properties
     for key, value in kwargs.items():
-        if value is not None:
+        if key not in ["id", "type", "source", "target", "sourceHandle", "targetHandle", "markerEnd"] and value is not None:
             new_edge[key] = value
     
     structure['edges'].append(new_edge)
     
-    save_project_structure(project_name, structure)
+    save_project_structure(project_id, structure)
     
     return {
         "success": True,
@@ -45,11 +50,11 @@ def create_edge(project_name: str, edge_id: str, edge_type: str, source: str, ta
         "edge": new_edge
     }
 
-def delete_edge(project_name: str, edge_id: str) -> Dict[str, Any]:
+def delete_edge(project_id: str, edge_id: str) -> Dict[str, Any]:
     """Delete an edge"""
     from .project_structure import get_project_structure, save_project_structure
     
-    structure = get_project_structure(project_name)
+    structure = get_project_structure(project_id)
     
     # Check if edge exists
     if not any(edge['id'] == edge_id for edge in structure['edges']):
@@ -58,7 +63,7 @@ def delete_edge(project_name: str, edge_id: str) -> Dict[str, Any]:
     # Remove edge
     structure['edges'] = [e for e in structure['edges'] if e['id'] != edge_id]
     
-    save_project_structure(project_name, structure)
+    save_project_structure(project_id, structure)
     
     return {
         "success": True,

@@ -8,6 +8,7 @@ services:
       - "8000:8000"
     volumes:
       - ./packages/backend:/app
+      - ./packages/backend/projects:/app/projects
     environment:
       - PYTHONUNBUFFERED=1
     networks:

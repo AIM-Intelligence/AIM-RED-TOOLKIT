@@ -9,31 +9,15 @@ interface Project {
 
 export default function Home() {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<Project[]>([
-    {
-      id: "1",
-      title: "Data Pipeline Project",
-      description: "Build and manage data processing workflows with ML models",
-    },
-    {
-      id: "2",
-      title: "Analytics Dashboard",
-      description: "Real-time analytics and visualization platform",
-    },
-    {
-      id: "3",
-      title: "Model Training Suite",
-      description: "Train, evaluate, and deploy machine learning models",
-    },
-  ]);
+  const [projects, setProjects] = useState<Project[]>([]);
 
   const handleProjectClick = async (project: Project) => {
-    navigate(`/project/${project.title}`);
+    navigate(`/project/${project.id}`);
   };
 
   const handleCreateProject = () => {
     const newProject: Project = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       title: `New Project ${projects.length + 1}`,
       description: "Click to configure your new project",
     };

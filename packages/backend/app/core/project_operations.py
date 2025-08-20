@@ -19,25 +19,26 @@ def get_all_projects() -> List[Dict[str, str]]:
     registry = get_projects_registry()
     return registry["projects"]
 
-def create_project(project_name: str, project_description: str) -> Dict[str, Any]:
+def create_project(project_name: str, project_description: str, project_id: str) -> Dict[str, Any]:
     """Create a new project folder and json file"""
     ensure_projects_dir()
-    project_path = PROJECTS_BASE_PATH / project_name
+    project_path = PROJECTS_BASE_PATH / project_id
     
     if project_path.exists():
         raise ValueError(f"Project '{project_name}' already exists")
     
     # Add to registry first (will raise error if already exists)
-    add_project_to_registry(project_name, project_description)
+    add_project_to_registry(project_name, project_description, project_id)
     
     try:
         project_path.mkdir(exist_ok=True)
         
-        # Create empty project json with initial structure
+        # Create empty project json with initial structure matching ReactFlow format
         project_json_path = project_path / "structure.json"
         initial_structure = {
             "project_name": project_name,
-            "project_description": project_description,
+            "project_description": project_description or "",
+            "project_id": project_id,
             "nodes": [],
             "edges": []
         }
@@ -48,28 +49,26 @@ def create_project(project_name: str, project_description: str) -> Dict[str, Any
         return {
             "success": True,
             "message": f"Project '{project_name}' created successfully",
-            "project_name": project_name,
-            "project_description": project_description
         }
     except Exception as e:
         # If folder creation fails, remove from registry
         remove_project_from_registry(project_name)
         raise e
 
-def delete_project(project_name: str) -> Dict[str, Any]:
+def delete_project(project_name: str, project_id:str) -> Dict[str, Any]:
     """Delete entire project folder and remove from registry"""
     ensure_projects_dir()
-    project_path = PROJECTS_BASE_PATH / project_name
+    project_path = PROJECTS_BASE_PATH / project_id
     
     if not project_path.exists():
-        raise ValueError(f"Project '{project_name}' does not exist")
+        raise ValueError(f"Project with ID '{project_id}' does not exist")
     
     # Delete folder first
     shutil.rmtree(project_path)
     
     # Remove from registry
     try:
-        remove_project_from_registry(project_name)
+        remove_project_from_registry(project_name, project_id)
     except ValueError:
         # Project might not be in registry if it was created before registry system
         pass
@@ -79,12 +78,20 @@ def delete_project(project_name: str) -> Dict[str, Any]:
         "message": f"Project '{project_name}' deleted successfully"
     }
 
-def get_project_path(project_name: str) -> Path:
-    """Get the path to a project directory"""
+def get_project_path(project_id: str) -> Path:
+    """Get the path to a project directory using project_id"""
     ensure_projects_dir()
-    project_path = PROJECTS_BASE_PATH / project_name
+    project_path = PROJECTS_BASE_PATH / project_id
     
     if not project_path.exists():
-        raise ValueError(f"Project '{project_name}' does not exist")
+        raise ValueError(f"Project with ID '{project_id}' does not exist")
     
     return project_path
+
+def get_project_id_by_name(project_name: str) -> str:
+    """Get project_id from project_name using the registry"""
+    registry = get_projects_registry()
+    for project in registry["projects"]:
+        if project["project_name"] == project_name:
+            return project["project_id"]
+    raise ValueError(f"Project '{project_name}' not found in registry")

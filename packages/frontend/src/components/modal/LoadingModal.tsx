@@ -1,16 +1,24 @@
 import React, { useEffect } from "react";
 
-interface SaveStatusModalProps {
+interface Notice {
+  loading: string;
+  success: string;
+  error: string;
+}
+
+interface LoadingModalProps {
   isOpen: boolean;
   status: "loading" | "success" | "error";
   onClose: () => void;
+  notice: Notice;
 }
 
-const SaveStatusModal: React.FC<SaveStatusModalProps> = ({
+export default function LoadingModal({
   isOpen,
   status,
   onClose,
-}) => {
+  notice,
+}: LoadingModalProps) {
   useEffect(() => {
     if (isOpen && status !== "loading") {
       const timer = setTimeout(() => {
@@ -25,7 +33,7 @@ const SaveStatusModal: React.FC<SaveStatusModalProps> = ({
   const handleBackgroundClick = (e: React.MouseEvent) => {
     // Always stop propagation to prevent closing IDE modal
     e.stopPropagation();
-    
+
     // Only close SaveStatusModal if not loading and clicked on background
     if (status !== "loading" && e.target === e.currentTarget) {
       onClose();
@@ -49,7 +57,7 @@ const SaveStatusModal: React.FC<SaveStatusModalProps> = ({
               className="w-12 h-12 animate-spin-reverse"
             />
             <span className="text-white text-lg mt-4 font-semibold">
-              Saving...
+              {notice.loading}
             </span>
           </div>
         )}
@@ -72,7 +80,7 @@ const SaveStatusModal: React.FC<SaveStatusModalProps> = ({
               </svg>
             </div>
             <span className="text-white text-lg font-semibold">
-              Saved Successfully
+              {notice.success}
             </span>
           </div>
         )}
@@ -95,13 +103,11 @@ const SaveStatusModal: React.FC<SaveStatusModalProps> = ({
               </svg>
             </div>
             <span className="text-white text-lg font-semibold">
-              Failed to Save
+              {notice.error}
             </span>
           </div>
         )}
       </div>
     </div>
   );
-};
-
-export default SaveStatusModal;
+}

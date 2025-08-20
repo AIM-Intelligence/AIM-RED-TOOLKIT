@@ -1,13 +1,13 @@
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-def create_node(project_name: str, node_id: str, node_type: str, position: Dict[str, float], 
+def create_node(project_id: str, node_id: str, node_type: str, position: Dict[str, float], 
                 data: Dict[str, Any]) -> Dict[str, Any]:
     """Create a new node and corresponding python file matching React Flow structure"""
     from .project_operations import get_project_path
     from .project_structure import get_project_structure, save_project_structure
     
-    project_path = get_project_path(project_name)
+    project_path = get_project_path(project_id)
     
     # Extract title from data for filename
     node_title = data.get('title', f'node_{node_id}')
@@ -22,7 +22,7 @@ def create_node(project_name: str, node_id: str, node_type: str, position: Dict[
         f.write(initial_code)
     
     # Update project json
-    structure = get_project_structure(project_name)
+    structure = get_project_structure(project_id)
     
     # Check if node already exists
     if any(node['id'] == node_id for node in structure['nodes']):
@@ -31,18 +31,23 @@ def create_node(project_name: str, node_id: str, node_type: str, position: Dict[
         raise ValueError(f"Node with ID '{node_id}' already exists")
     
     # Add new node with React Flow structure
+    # Ensure data has required fields
+    node_data = {
+        "title": data.get('title', f'Node {node_id}'),
+        "description": data.get('description', ''),
+        "file": py_filename,  # Add file reference to data
+        **data  # Include any additional data fields
+    }
+    
     new_node = {
         "id": node_id,
         "type": node_type,
         "position": position,
-        "data": {
-            **data,
-            "file": py_filename  # Add file reference to data
-        }
+        "data": node_data
     }
     structure['nodes'].append(new_node)
     
-    save_project_structure(project_name, structure)
+    save_project_structure(project_id, structure)
     
     return {
         "success": True,
@@ -50,15 +55,15 @@ def create_node(project_name: str, node_id: str, node_type: str, position: Dict[
         "node": new_node
     }
 
-def delete_node(project_name: str, node_id: str) -> Dict[str, Any]:
+def delete_node(project_id: str, node_id: str) -> Dict[str, Any]:
     """Delete a node and its corresponding python file"""
     from .project_operations import get_project_path
     from .project_structure import get_project_structure, save_project_structure
     
-    project_path = get_project_path(project_name)
+    project_path = get_project_path(project_id)
     
     # Get project structure
-    structure = get_project_structure(project_name)
+    structure = get_project_structure(project_id)
     
     # Find node to delete
     node_to_delete = None
@@ -86,20 +91,20 @@ def delete_node(project_name: str, node_id: str) -> Dict[str, Any]:
         if e.get('source') != node_id and e.get('target') != node_id
     ]
     
-    save_project_structure(project_name, structure)
+    save_project_structure(project_id, structure)
     
     return {
         "success": True,
         "message": f"Node '{node_id}' deleted successfully"
     }
 
-def get_node_code(project_name: str, node_id: str) -> str:
+def get_node_code(project_id: str, node_id: str) -> str:
     """Get the code content of a node's python file"""
     from .project_operations import get_project_path
     from .project_structure import get_project_structure
     
-    project_path = get_project_path(project_name)
-    structure = get_project_structure(project_name)
+    project_path = get_project_path(project_id)
+    structure = get_project_structure(project_id)
     
     # Find node
     node = None
@@ -123,13 +128,13 @@ def get_node_code(project_name: str, node_id: str) -> str:
     with open(py_filepath, 'r') as f:
         return f.read()
 
-def save_node_code(project_name: str, node_id: str, code: str) -> Dict[str, Any]:
+def save_node_code(project_id: str, node_id: str, code: str) -> Dict[str, Any]:
     """Save code to a node's python file"""
     from .project_operations import get_project_path
     from .project_structure import get_project_structure
     
-    project_path = get_project_path(project_name)
-    structure = get_project_structure(project_name)
+    project_path = get_project_path(project_id)
+    structure = get_project_structure(project_id)
     
     # Find node
     node = None

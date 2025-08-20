@@ -17,12 +17,12 @@ class CodeExecutionResponse(BaseModel):
     exit_code: int
 
 class GetNodeCodeRequest(BaseModel):
-    project_name: str
+    project_id: str
     node_id: str
     node_title: Optional[str] = None  # For finding the file if needed
 
 class SaveNodeCodeRequest(BaseModel):
-    project_name: str
+    project_id: str
     node_id: str
     node_title: Optional[str] = None
     code: str
@@ -42,7 +42,7 @@ async def execute_code(request: CodeExecutionRequest):
 async def get_node_code(request: GetNodeCodeRequest):
     """Get the code content of a node for Monaco Editor"""
     try:
-        code = node_operations.get_node_code(request.project_name, request.node_id)
+        code = node_operations.get_node_code(request.project_id, request.node_id)
         
         # Return in format compatible with Monaco Editor
         return {
@@ -70,7 +70,7 @@ async def save_node_code(request: SaveNodeCodeRequest):
     """Save code to a node's python file"""
     try:
         result = node_operations.save_node_code(
-            request.project_name,
+            request.project_id,
             request.node_id,
             request.code
         )

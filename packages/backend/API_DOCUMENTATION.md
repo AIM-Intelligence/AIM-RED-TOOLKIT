@@ -5,6 +5,22 @@
 - **API Version**: 1.0.0
 - **Authentication**: None (CORS enabled for localhost:5173)
 
+## Important Changes
+✅ **Project ID Implementation Complete**: The backend has been fully updated to use `project_id` as the primary identifier for all project operations:
+
+### What's Been Updated:
+- ✅ All project operations now use `project_id` for folder path resolution
+- ✅ Create/Delete project endpoints properly use `project_id`
+- ✅ Node/Edge operations now accept `project_id` instead of `project_name`
+- ✅ Code management endpoints now accept `project_id`
+- ✅ GET endpoint changed from `/api/project/{project_name}` to `/api/project/{project_id}`
+- ✅ Registry properly tracks and uses `project_id`
+
+### Migration Notes:
+- Projects are now stored in folders named by `project_id` (e.g., `projects/{project_id}/`)
+- The `project_name` is still stored for display purposes but `project_id` is used for all operations
+- All API endpoints that previously used `project_name` now require `project_id`
+
 ## Table of Contents
 1. [Root Endpoint](#root-endpoint)
 2. [Health Check APIs](#health-check-apis)
@@ -92,7 +108,7 @@ Get code content of a specific node
 **Request Body**
 ```json
 {
-  "project_name": "my_project",
+  "project_id": "unique_project_id",
   "node_id": "1",
   "node_title": "Data Input"  // Optional
 }
@@ -127,7 +143,7 @@ Save code to a node's Python file
 **Request Body**
 ```json
 {
-  "project_name": "my_project",
+  "project_id": "unique_project_id",
   "node_id": "1",
   "node_title": "Data Input",  // Optional
   "code": "# Updated code\nprint('Updated!')"
@@ -161,21 +177,26 @@ Get all projects list
   "projects": [
     {
       "project_name": "project1",
-      "project_description": "Description of project1"
+      "project_description": "Description of project1",
+      "project_id": "proj_id_1"
     },
     {
       "project_name": "project2",
-      "project_description": "Description of project2"
+      "project_description": "Description of project2",
+      "project_id": "proj_id_2"
     }
   ]
 }
 ```
 
-### GET /api/project/{project_name}
+**Notes**:
+- Returns all projects from the registry with their `project_id` values
+
+### GET /api/project/{project_id}
 Get specific project's node-edge structure
 
 **Path Parameters**
-- `project_name` (string): Name of the project
+- `project_id` (string): Unique identifier of the project
 
 **Response**
 ```json
@@ -184,6 +205,7 @@ Get specific project's node-edge structure
   "project": {
     "project_name": "my_project",
     "project_description": "My AI project",
+    "project_id": "unique_project_id",
     "nodes": [
       {
         "id": "1",
@@ -219,7 +241,8 @@ Create a new project
 ```json
 {
   "project_name": "new_project",
-  "project_description": "Description of the new project"
+  "project_description": "Description of the new project",
+  "project_id": "unique_project_id"
 }
 ```
 
@@ -227,14 +250,17 @@ Create a new project
 ```json
 {
   "success": true,
-  "message": "Project 'new_project' created successfully",
-  "project_name": "new_project",
-  "project_description": "Description of the new project"
+  "message": "Project 'new_project' created successfully"
 }
 ```
 
+**Notes**:
+- The `project_id` is now required and used to create the project folder
+- The project folder will be created at `projects/{project_id}/`
+- The `structure.json` file will include the `project_id` field
+
 **Error Responses**
-- `400`: Project already exists
+- `400`: Project already exists (checks both name and ID)
 
 ### DELETE /api/project/delete
 Delete an entire project
@@ -242,7 +268,8 @@ Delete an entire project
 **Request Body**
 ```json
 {
-  "project_name": "project_to_delete"
+  "project_name": "project_to_delete",
+  "project_id": "project_id_to_delete"
 }
 ```
 
@@ -254,6 +281,11 @@ Delete an entire project
 }
 ```
 
+**Notes**:
+- Both `project_name` and `project_id` are required
+- The project folder at `projects/{project_id}/` will be deleted
+- The project will be removed from the registry by `project_id`
+
 **Error Responses**
 - `404`: Project not found
 
@@ -263,7 +295,7 @@ Create a new node in a project
 **Request Body**
 ```json
 {
-  "project_name": "my_project",
+  "project_id": "unique_project_id",
   "node_id": "2",
   "node_type": "default",
   "position": {"x": 400, "y": 100},
@@ -301,7 +333,7 @@ Delete a node from a project
 **Request Body**
 ```json
 {
-  "project_name": "my_project",
+  "project_id": "unique_project_id",
   "node_id": "2"
 }
 ```
@@ -323,7 +355,7 @@ Create a new edge between nodes
 **Request Body**
 ```json
 {
-  "project_name": "my_project",
+  "project_id": "unique_project_id",
   "edge_id": "e2",
   "edge_type": "bezier",
   "source": "1",
@@ -356,7 +388,7 @@ Delete an edge from a project
 **Request Body**
 ```json
 {
-  "project_name": "my_project",
+  "project_id": "unique_project_id",
   "edge_id": "e2"
 }
 ```
@@ -381,7 +413,7 @@ The backend manages files in the following structure:
 ```
 projects/
 ├── projects.json              # Registry of all projects
-└── {project_name}/
+└── {project_id}/              # ⚠️ Changed: Now uses project_id instead of project_name
     ├── structure.json         # Node-edge structure for the project
     └── {node_id}_{node_title}.py  # Python code for each node
 ```
@@ -392,7 +424,8 @@ projects/
   "projects": [
     {
       "project_name": "project1",
-      "project_description": "Description"
+      "project_description": "Description",
+      "project_id": "unique_id_1"
     }
   ]
 }
@@ -403,6 +436,7 @@ projects/
 {
   "project_name": "my_project",
   "project_description": "Project description",
+  "project_id": "unique_project_id",
   "nodes": [
     {
       "id": "1",

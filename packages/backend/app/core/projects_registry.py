@@ -30,7 +30,7 @@ def save_projects_registry(registry: Dict[str, Any]) -> None:
     with open(PROJECTS_REGISTRY_FILE, 'w') as f:
         json.dump(registry, f, indent=2)
 
-def add_project_to_registry(project_name: str, project_description: str) -> None:
+def add_project_to_registry(project_name: str, project_description: str, project_id:str) -> None:
     """Add a project to the registry"""
     registry = get_projects_registry()
     
@@ -42,40 +42,41 @@ def add_project_to_registry(project_name: str, project_description: str) -> None
     # Add new project
     registry["projects"].append({
         "project_name": project_name,
-        "project_description": project_description
+        "project_description": project_description,
+        "project_id": project_id
     })
     
     save_projects_registry(registry)
 
-def remove_project_from_registry(project_name: str) -> None:
-    """Remove a project from the registry"""
+def remove_project_from_registry(project_name: str, project_id: str) -> None:
+    """Remove a project from the registry using project_id"""
     registry = get_projects_registry()
     
-    # Find and remove project
+    # Find and remove project by project_id
     original_length = len(registry["projects"])
     registry["projects"] = [
         p for p in registry["projects"] 
-        if p["project_name"] != project_name
+        if p["project_id"] != project_id
     ]
     
     if len(registry["projects"]) == original_length:
-        raise ValueError(f"Project '{project_name}' not found in registry")
+        raise ValueError(f"Project with ID '{project_id}' not found in registry")
     
     save_projects_registry(registry)
 
-def update_project_in_registry(project_name: str, project_description: str) -> None:
-    """Update a project's description in the registry"""
-    registry = get_projects_registry()
+# def update_project_in_registry(project_name: str, project_description: str) -> None:
+#     """Update a project's description in the registry"""
+#     registry = get_projects_registry()
     
-    # Find and update project
-    found = False
-    for project in registry["projects"]:
-        if project["project_name"] == project_name:
-            project["project_description"] = project_description
-            found = True
-            break
+#     # Find and update project
+#     found = False
+#     for project in registry["projects"]:
+#         if project["project_name"] == project_name:
+#             project["project_description"] = project_description
+#             found = True
+#             break
     
-    if not found:
-        raise ValueError(f"Project '{project_name}' not found in registry")
+#     if not found:
+#         raise ValueError(f"Project '{project_name}' not found in registry")
     
-    save_projects_registry(registry)
+#     save_projects_registry(registry)

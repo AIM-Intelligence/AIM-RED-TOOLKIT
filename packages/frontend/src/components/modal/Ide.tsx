@@ -3,11 +3,12 @@ import Editor from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import RunCodeButton from "../buttons/ide/RunCodeButton";
 import ExportCodeButton from "../buttons/ide/ExportCodeButton";
-import SaveStatusModal from "./SaveStatusModal";
+import LoadingModal from "./LoadingModal";
 
 interface IdeModalProps {
   isOpen: boolean;
   onClose: () => void;
+  projectId: string;
   projectTitle: string;
   nodeId: string;
   nodeTitle: string;
@@ -17,6 +18,7 @@ interface IdeModalProps {
 const IdeModal: React.FC<IdeModalProps> = ({
   isOpen,
   onClose,
+  projectId,
   projectTitle,
   nodeId,
   nodeTitle,
@@ -29,20 +31,21 @@ const IdeModal: React.FC<IdeModalProps> = ({
   );
   const [code, setCode] = useState(initialCode);
   const [isLoadingCode, setIsLoadingCode] = useState(false);
+  console.log(projectTitle);
 
   // Fetch code from backend when modal opens
   const fetchCode = useCallback(async () => {
-    if (!projectTitle || !nodeId) return;
+    if (!projectId || !nodeId) return;
 
     setIsLoadingCode(true);
     try {
-      const response = await fetch("http://localhost:8000/api/code/getcode", {
+      const response = await fetch("/api/code/getcode", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          project_name: projectTitle,
+          project_id: projectId,
           node_id: nodeId,
           node_title: nodeTitle,
         }),
@@ -62,7 +65,7 @@ const IdeModal: React.FC<IdeModalProps> = ({
     } finally {
       setIsLoadingCode(false);
     }
-  }, [projectTitle, nodeId, nodeTitle]);
+  }, [projectId, nodeId, nodeTitle]);
 
   const handleSave = async () => {
     if (!editorRef.current) return;
@@ -72,13 +75,13 @@ const IdeModal: React.FC<IdeModalProps> = ({
     const currentCode = editorRef.current.getValue();
 
     try {
-      const response = await fetch("http://localhost:8000/api/code/savecode", {
+      const response = await fetch("/api/code/savecode", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          project_name: projectTitle,
+          project_id: projectId,
           node_id: nodeId,
           node_title: nodeTitle,
           code: currentCode,
@@ -158,9 +161,9 @@ const IdeModal: React.FC<IdeModalProps> = ({
               Save
             </button>
             <RunCodeButton />
-            <ExportCodeButton 
-              nodeId={nodeId} 
-              nodeTitle={nodeTitle} 
+            <ExportCodeButton
+              nodeId={nodeId}
+              nodeTitle={nodeTitle}
               editorRef={editorRef}
             />
           </div>
@@ -245,11 +248,15 @@ const IdeModal: React.FC<IdeModalProps> = ({
         </div>
       </div>
 
-      {/* Save Status Modal */}
-      <SaveStatusModal
+      <LoadingModal
         isOpen={saveModalOpen}
         status={saveStatus}
         onClose={() => setSaveModalOpen(false)}
+        notice={{
+          loading: "Saving...",
+          success: "Saved Successfully",
+          error: "Fail to Save",
+        }}
       />
     </div>
   );

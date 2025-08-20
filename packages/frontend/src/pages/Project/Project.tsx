@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { useParams, Navigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
   ReactFlow,
   MiniMap,
@@ -22,9 +22,48 @@ import DefaultNode from "../../components/nodes/DefaultNode";
 import DefaultEdge from "../../components/edges/DefaultEdge";
 import IdeModal from "../../components/modal/Ide";
 import { removeStyle } from "./removeStyle";
+import Loading from "../../components/loading/Loading";
+import WrongPath from "../WrongPath/WrongPath";
+
+// Backend API response types
+interface BackendNodeData {
+  title: string;
+  description?: string;
+  file?: string;
+}
+
+interface BackendNode {
+  id: string;
+  type?: string;
+  position: { x: number; y: number };
+  data: BackendNodeData;
+}
+
+interface BackendEdge {
+  id: string;
+  type?: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+  markerEnd?: { type: MarkerType | string };
+}
+
+interface BackendProject {
+  project_name: string;
+  project_description?: string;
+  project_id: string;
+  nodes: BackendNode[];
+  edges: BackendEdge[];
+}
+
+interface ProjectApiResponse {
+  success: boolean;
+  project: BackendProject;
+}
 
 export default function Project() {
-  const { projectTitle } = useParams<{ projectTitle: string }>();
+  const { projectId } = useParams<{ projectId: string }>();
 
   const [isIdeModalOpen, setIsIdeModalOpen] = useState(false);
   const [selectedNodeData, setSelectedNodeData] = useState<{
@@ -34,6 +73,18 @@ export default function Project() {
     nodeId: "1",
     title: "Python IDE",
   });
+  const [projectTitle, setProjectTitle] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isInvalidProject, setIsInvalidProject] = useState(false);
+
+  // Initialize nodes and edges state before using them
+  const initialNodes: DefaultNodeType[] = [];
+  const initialEdges: Edge[] = [];
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodeIdCounter, setNodeIdCounter] = useState(4);
 
   useEffect(() => {
     const style = document.createElement("style");
@@ -44,6 +95,110 @@ export default function Project() {
     };
   }, []);
 
+  // Fetch project data from backend
+  useEffect(() => {
+    const fetchProjectData = async () => {
+      if (!projectId) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // Validate projectId format (basic validation)
+        if (!projectId.match(/^[a-zA-Z0-9_-]+$/)) {
+          setIsInvalidProject(true);
+          setIsLoading(false);
+          return;
+        }
+
+        const response = await fetch(`/api/project/${projectId}`);
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            setIsInvalidProject(true);
+            setIsLoading(false);
+            return;
+          }
+          throw new Error(`Failed to fetch project: ${response.statusText}`);
+        }
+
+        const data: ProjectApiResponse = await response.json();
+
+        if (data.success && data.project) {
+          const project: BackendProject = data.project;
+
+          // Set project title
+          setProjectTitle(project.project_name || "");
+
+          // Transform backend nodes to ReactFlow format
+          const transformedNodes: DefaultNodeType[] = project.nodes.map(
+            (node: BackendNode) => ({
+              id: node.id,
+              type: node.type || "default",
+              position: node.position,
+              data: {
+                title: node.data.title || `Node ${node.id}`,
+                description: node.data.description || "",
+                viewCode: () => {
+                  setSelectedNodeData({
+                    nodeId: node.id,
+                    title: node.data.title || `Node ${node.id}`,
+                  });
+                  setIsIdeModalOpen(true);
+                },
+              },
+            })
+          );
+
+          // Transform backend edges to ReactFlow format
+          const transformedEdges: Edge[] = project.edges.map(
+            (edge: BackendEdge) => ({
+              id: edge.id,
+              type: edge.type || "custom",
+              source: edge.source,
+              target: edge.target,
+              sourceHandle: edge.sourceHandle || undefined,
+              targetHandle: edge.targetHandle || undefined,
+              style: { stroke: "#64748b", strokeWidth: 2 },
+              markerEnd: edge.markerEnd
+                ? {
+                    type: edge.markerEnd.type as MarkerType,
+                  }
+                : {
+                    type: MarkerType.ArrowClosed,
+                  },
+            })
+          );
+
+          setNodes(transformedNodes);
+          setEdges(transformedEdges);
+
+          // Update node counter based on existing nodes
+          if (project.nodes.length > 0) {
+            const maxId = Math.max(
+              ...project.nodes.map((n: BackendNode) => parseInt(n.id, 10) || 0)
+            );
+            setNodeIdCounter(maxId + 1);
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching project:", err);
+        // Check if it's a network or malformed URI error
+        if (err instanceof TypeError && err.message.includes("URI")) {
+          setIsInvalidProject(true);
+        } else {
+          setError(
+            err instanceof Error ? err.message : "Failed to load project"
+          );
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProjectData();
+  }, [projectId, setNodes, setEdges]);
+
   const handleNodeClick = (nodeId: string, title: string) => {
     setSelectedNodeData({
       nodeId,
@@ -51,15 +206,6 @@ export default function Project() {
     });
     setIsIdeModalOpen(true);
   };
-
-  const initialNodes: DefaultNodeType[] = [];
-
-  // 초기 엣지 설정 - type: "custom" 추가
-  const initialEdges: Edge[] = [];
-
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-  const [nodeIdCounter, setNodeIdCounter] = useState(4);
 
   // 노드 타입 정의
   const nodeTypes = useMemo<NodeTypes>(
@@ -184,8 +330,50 @@ export default function Project() {
     return "#1e293b";
   };
 
-  if (!projectTitle) {
-    return <Navigate to="/project-not-exists" replace />;
+  if (!projectId) {
+    return <WrongPath />;
+  }
+
+  if (isLoading) {
+    return <Loading />;
+  }
+
+  if (isInvalidProject) {
+    return <WrongPath />;
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center w-screen h-screen bg-black">
+        <div className="text-center">
+          <div className="text-red-700 mb-4">
+            <svg
+              className="w-12 h-12 mx-auto"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+          </div>
+          <h2 className="text-xl font-semibold text-white mb-2">
+            Failed to load project
+          </h2>
+          <p className="text-gray-400 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-red-800 text-white rounded hover:bg-red-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -237,6 +425,7 @@ export default function Project() {
           className="bg-gray-800 p-4 rounded-lg border border-gray-700"
         >
           <div className="flex gap-3 items-center">
+            <h1>{projectTitle}</h1>
             <button
               onClick={addNewNode}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium"
@@ -254,6 +443,7 @@ export default function Project() {
       <IdeModal
         isOpen={isIdeModalOpen}
         onClose={() => setIsIdeModalOpen(false)}
+        projectId={projectId}
         projectTitle={projectTitle}
         nodeId={selectedNodeData.nodeId}
         nodeTitle={selectedNodeData.title}

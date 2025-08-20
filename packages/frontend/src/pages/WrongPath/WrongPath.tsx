@@ -12,7 +12,7 @@ export default function WrongPath() {
       />
       <span className="text-white text-2xl p-8">Wrong Path</span>
       <button
-        className="bg-red-900 text-white text-xl mt-4 p-6 rounded-xl hover:bg-red-800"
+        className="bg-red-900 text-white text-xl mt-4 p-6 rounded-xl hover:bg-red-800 hover:cursor-pointer"
         onClick={goRoot}
       >
         Select Project
