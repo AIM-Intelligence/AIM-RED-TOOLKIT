@@ -5,22 +5,6 @@
 - **API Version**: 1.0.0
 - **Authentication**: None (CORS enabled for localhost:5173)
 
-## Important Changes
-✅ **Project ID Implementation Complete**: The backend has been fully updated to use `project_id` as the primary identifier for all project operations:
-
-### What's Been Updated:
-- ✅ All project operations now use `project_id` for folder path resolution
-- ✅ Create/Delete project endpoints properly use `project_id`
-- ✅ Node/Edge operations now accept `project_id` instead of `project_name`
-- ✅ Code management endpoints now accept `project_id`
-- ✅ GET endpoint changed from `/api/project/{project_name}` to `/api/project/{project_id}`
-- ✅ Registry properly tracks and uses `project_id`
-
-### Migration Notes:
-- Projects are now stored in folders named by `project_id` (e.g., `projects/{project_id}/`)
-- The `project_name` is still stored for display purposes but `project_id` is used for all operations
-- All API endpoints that previously used `project_name` now require `project_id`
-
 ## Table of Contents
 1. [Root Endpoint](#root-endpoint)
 2. [Health Check APIs](#health-check-apis)
@@ -155,7 +139,7 @@ Save code to a node's Python file
 {
   "success": true,
   "message": "Code saved for node '1'",
-  "file_path": "projects/my_project/1_Data_Input.py"
+  "file_path": "projects/unique_project_id/1_Data_Input.py"
 }
 ```
 
@@ -189,9 +173,6 @@ Get all projects list
 }
 ```
 
-**Notes**:
-- Returns all projects from the registry with their `project_id` values
-
 ### GET /api/project/{project_id}
 Get specific project's node-edge structure
 
@@ -224,7 +205,9 @@ Get specific project's node-edge structure
         "type": "bezier",
         "source": "1",
         "target": "2",
-        "markerEnd": {"type": "ArrowClosed"}
+        "sourceHandle": null,
+        "targetHandle": null,
+        "markerEnd": {"type": "arrowclosed"}
       }
     ]
   }
@@ -254,11 +237,6 @@ Create a new project
 }
 ```
 
-**Notes**:
-- The `project_id` is now required and used to create the project folder
-- The project folder will be created at `projects/{project_id}/`
-- The `structure.json` file will include the `project_id` field
-
 **Error Responses**
 - `400`: Project already exists (checks both name and ID)
 
@@ -280,11 +258,6 @@ Delete an entire project
   "message": "Project 'project_to_delete' deleted successfully"
 }
 ```
-
-**Notes**:
-- Both `project_name` and `project_id` are required
-- The project folder at `projects/{project_id}/` will be deleted
-- The project will be removed from the registry by `project_id`
 
 **Error Responses**
 - `404`: Project not found
@@ -360,7 +333,7 @@ Create a new edge between nodes
   "edge_type": "bezier",
   "source": "1",
   "target": "2",
-  "marker_end": {"type": "ArrowClosed"}
+  "marker_end": {"type": "arrowclosed"}
 }
 ```
 
@@ -374,7 +347,9 @@ Create a new edge between nodes
     "type": "bezier",
     "source": "1",
     "target": "2",
-    "markerEnd": {"type": "ArrowClosed"}
+    "sourceHandle": null,
+    "targetHandle": null,
+    "markerEnd": {"type": "arrowclosed"}
   }
 }
 ```
@@ -413,7 +388,7 @@ The backend manages files in the following structure:
 ```
 projects/
 ├── projects.json              # Registry of all projects
-└── {project_id}/              # ⚠️ Changed: Now uses project_id instead of project_name
+└── {project_id}/              # Project folder (named by project_id)
     ├── structure.json         # Node-edge structure for the project
     └── {node_id}_{node_title}.py  # Python code for each node
 ```
@@ -455,7 +430,9 @@ projects/
       "type": "bezier",
       "source": "1",
       "target": "2",
-      "markerEnd": {"type": "ArrowClosed"}
+      "sourceHandle": null,
+      "targetHandle": null,
+      "markerEnd": {"type": "arrowclosed"}
     }
   ]
 }
@@ -490,7 +467,7 @@ pnpm backend:dev
 
 # Or directly with Python
 cd packages/backend
-python main.py
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Server Configuration
@@ -502,19 +479,26 @@ python main.py
 - FastAPI
 - Uvicorn
 - Pydantic
-- Python 3.7+
+- Python 3.11+
 
 ---
 
-## Testing
+## Docker Support
 
-Test scripts are available in the root directory:
-- `test_savecode_api.py` - Test code saving functionality
-
-Run tests:
+### Building and Running with Docker
 ```bash
-python test_savecode_api.py
+# Build and run with docker-compose
+docker-compose up --build
+
+# Backend will be available at http://localhost:8000
+# Frontend will be available at http://localhost:5173
 ```
+
+### Docker Configuration
+- Backend runs on port 8000
+- Frontend runs on port 5173
+- Networks are configured for inter-service communication
+- Volumes are mounted for hot-reload in development
 
 ---
 
@@ -522,7 +506,9 @@ python test_savecode_api.py
 
 1. All code execution happens in isolated temporary files
 2. File names are sanitized (spaces and slashes replaced with underscores)
-3. Projects must have unique names
+3. Projects must have unique IDs (project_id)
 4. Node IDs must be unique within a project
 5. Edge IDs must be unique within a project
 6. Deleting a node automatically removes all connected edges
+7. Project folders are created using project_id, not project_name
+8. All node/edge operations now use project_id for path resolution

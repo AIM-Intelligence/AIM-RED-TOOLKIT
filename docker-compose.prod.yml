@@ -1,20 +1,22 @@
+version: '3.8'
+
 services:
   backend:
     build:
       context: .
-      dockerfile: ./packages/backend/Dockerfile
-    container_name: aim-red-backend
+      dockerfile: ./packages/backend/Dockerfile.prod
+    container_name: aim-red-backend-prod
     ports:
       - "8000:8000"
     volumes:
-      # Mount only the source code for hot-reload
-      - ./packages/backend/app:/app/app
-      # Mount the projects directory for persistent storage
+      # Only mount the projects directory for persistent storage
+      # No source code mounting in production
       - ./packages/backend/projects:/app/projects
     environment:
       - PYTHONUNBUFFERED=1
     networks:
       - aim-red-network
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -24,20 +26,17 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: ./packages/frontend/Dockerfile
-    container_name: aim-red-frontend
+      dockerfile: ./packages/frontend/Dockerfile.prod
+    container_name: aim-red-frontend-prod
     ports:
-      - "5173:5173"
-    volumes:
-      - ./packages/frontend:/app/packages/frontend
-      - /app/packages/frontend/node_modules
-      - /app/node_modules
+      - "80:80"
     environment:
-      - VITE_API_URL=http://backend:8000
+      - VITE_API_URL=/api
     depends_on:
       - backend
     networks:
       - aim-red-network
+    restart: unless-stopped
 
 networks:
   aim-red-network:

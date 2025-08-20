@@ -1,11 +1,25 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Projects directory - ignore contents but keep directory
 projects/*
-/projects
+!projects/.gitkeep
 
-app/__pycache__/*
-/app/__pycache__
+# Virtual environment
+venv/
+env/
+ENV/
 
-app/api/__pycache__
-/app/api/__pycache__/*
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
-/app/core/__pycache__/*
-app/core/__pycache__
+# OS
+.DS_Store
+Thumbs.db

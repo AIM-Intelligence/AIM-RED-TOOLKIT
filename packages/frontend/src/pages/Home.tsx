@@ -1,28 +1,48 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-
-interface Project {
-  id: string;
-  title: string;
-  description: string;
-}
+import NodeMaker from "../components/modal/NodeMaker";
+import Loading from "../components/loading/Loading";
+import type { ProjectInfo, Projects } from "../types";
 
 export default function Home() {
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectInfo[]>([]);
+  const [makingProject, setMakingProject] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleProjectClick = async (project: Project) => {
-    navigate(`/project/${project.id}`);
+  const getProjects = async () => {
+    try {
+      const response = await fetch("/api/project/");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch projects: ${response.statusText}`);
+      }
+      const data: Projects = await response.json();
+      if (data.success && data.projects) {
+        setProjects(data.projects);
+      }
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      setProjects([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    getProjects();
+  }, []);
+
+  const handleProjectClick = async (project: ProjectInfo) => {
+    navigate(`/project/${project.project_id}`);
   };
 
   const handleCreateProject = () => {
-    const newProject: Project = {
-      id: crypto.randomUUID(),
-      title: `New Project ${projects.length + 1}`,
-      description: "Click to configure your new project",
-    };
-    setProjects([...projects, newProject]);
+    setMakingProject(true);
   };
+
+  if (isLoading) {
+    return <Loading />;
+  }
 
   return (
     <div className="min-h-screen bg-black text-white p-8">
@@ -39,12 +59,16 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {projects.map((project) => (
             <div
-              key={project.id}
+              key={project.project_id}
               onClick={() => handleProjectClick(project)}
               className="bg-black border-2 border-gray-500 rounded-lg p-6 cursor-pointer hover:bg-gray-750 hover:border-red-700 transition-all duration-200"
             >
-              <h2 className="text-xl font-semibold mb-2">{project.title}</h2>
-              <p className="text-gray-400 text-sm">{project.description}</p>
+              <h2 className="text-xl font-semibold mb-2">
+                {project.project_name}
+              </h2>
+              <p className="text-gray-400 text-sm">
+                {project.project_description}
+              </p>
             </div>
           ))}
 
@@ -59,6 +83,13 @@ export default function Home() {
           </div>
         </div>
       </div>
+      <NodeMaker
+        isOpen={makingProject}
+        onClose={() => {
+          setMakingProject(false);
+          getProjects(); // Refresh projects list after closing modal
+        }}
+      />
     </div>
   );
 }
