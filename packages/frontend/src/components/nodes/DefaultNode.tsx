@@ -12,10 +12,7 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
   const [hovering, setHovering] = useState(false);
 
   const handleNodeClick = () => {
-    // 노드 클릭 시 파일 이름 생성 (nodeid-nodetitle.py)
-    const fileName = `${props.id}-${props.data.title.replace(/\s+/g, "-")}.py`;
-    console.log("Generated file name:", fileName);
-
+    //(nodeid-nodetitle.py)
     if (props.data.viewCode) {
       props.data.viewCode();
     }

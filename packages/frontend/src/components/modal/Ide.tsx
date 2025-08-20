@@ -158,7 +158,11 @@ const IdeModal: React.FC<IdeModalProps> = ({
               Save
             </button>
             <RunCodeButton />
-            <ExportCodeButton nodeId={nodeId} nodeTitle={nodeTitle} />
+            <ExportCodeButton 
+              nodeId={nodeId} 
+              nodeTitle={nodeTitle} 
+              editorRef={editorRef}
+            />
           </div>
 
           {/* Center - Title */}

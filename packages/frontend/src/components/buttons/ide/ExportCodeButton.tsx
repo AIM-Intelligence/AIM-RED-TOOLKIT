@@ -1,15 +1,12 @@
-import type { editor } from "monaco-editor";
-import { useRef } from "react";
 import type { ExportButtonProps } from "../props";
 
 export default function ExportCodeButton({
   nodeId,
   nodeTitle,
+  editorRef,
 }: ExportButtonProps) {
-  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
-
   const handleExportCode = () => {
-    if (editorRef.current) {
+    if (editorRef?.current) {
       const code = editorRef.current.getValue();
       const blob = new Blob([code], { type: "text/plain" });
       const url = URL.createObjectURL(blob);

@@ -210,7 +210,6 @@ export default function Project() {
         className="react-flow-transparent"
         deleteKeyCode={null} // Delete 키로 삭제 비활성화
       >
-        {/* 배경 패턴 */}
         <Background
           variant={BackgroundVariant.Dots}
           gap={20}
@@ -218,13 +217,11 @@ export default function Project() {
           color="#374151"
         />
 
-        {/* 컨트롤 (줌 인/아웃) */}
         <Controls
           className="bg-gray-800 border-gray-700"
           showInteractive={false}
         />
 
-        {/* 미니맵 */}
         <MiniMap
           nodeColor={nodeColor}
           nodeStrokeColor="#374151"
@@ -235,7 +232,6 @@ export default function Project() {
           zoomable
         />
 
-        {/* 상단 패널 - 노드 추가 버튼 */}
         <Panel
           position="top-left"
           className="bg-gray-800 p-4 rounded-lg border border-gray-700"
