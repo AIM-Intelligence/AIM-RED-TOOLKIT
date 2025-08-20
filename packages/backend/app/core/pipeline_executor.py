@@ -1,6 +1,4 @@
 import json
-import pickle
-import base64
 import tempfile
 import subprocess
 import sys
@@ -10,44 +8,50 @@ from pathlib import Path
 from .project_structure import get_project_structure
 from .node_operations import get_node_code
 
-def serialize_object(obj: Any, use_pickle: bool = True) -> Dict[str, Any]:
+def serialize_object(obj: Any) -> Dict[str, Any]:
     """
-    Serialize Python object for inter-node communication
+    Serialize Python object for inter-node communication using JSON only
     
     Args:
         obj: Python object to serialize
-        use_pickle: If True, use pickle for complex objects. If False, use JSON
     
     Returns:
         Dictionary with serialization metadata and data
     """
-    if not use_pickle or isinstance(obj, (dict, list, str, int, float, bool, type(None))):
-        # Use JSON for simple types
+    # First try to serialize as JSON if object has to_dict method
+    if hasattr(obj, 'to_dict'):
         try:
-            json.dumps(obj)  # Test if JSON serializable
-            return {
-                "type": "json",
-                "data": obj
-            }
+            obj_dict = obj.to_dict()
+            # Add type info for reconstruction
+            obj_dict['__class__'] = obj.__class__.__name__
+            obj_dict['__module__'] = obj.__class__.__module__
+            return {"type": "json", "data": obj_dict}
+        except Exception:
+            pass  # Fall back to other methods
+    
+    # Try standard JSON serialization
+    if isinstance(obj, (dict, list, str, int, float, bool, type(None))):
+        try:
+            # Check if dict contains serializable objects
+            if isinstance(obj, dict):
+                serialized_dict = {}
+                for key, value in obj.items():
+                    if hasattr(value, 'to_dict'):
+                        serialized_dict[key] = value.to_dict()
+                        serialized_dict[key]['__class__'] = value.__class__.__name__
+                        serialized_dict[key]['__module__'] = value.__class__.__module__
+                    else:
+                        serialized_dict[key] = value
+                json.dumps(serialized_dict)  # Test if serializable
+                return {"type": "json", "data": serialized_dict}
+            else:
+                json.dumps(obj)
+                return {"type": "json", "data": obj}
         except (TypeError, ValueError):
             pass
     
-    # Use pickle for complex objects
-    try:
-        pickled = pickle.dumps(obj)
-        encoded = base64.b64encode(pickled).decode('utf-8')
-        return {
-            "type": "pickle",
-            "data": encoded,
-            "class": obj.__class__.__name__ if hasattr(obj, '__class__') else "unknown"
-        }
-    except Exception as e:
-        # Fallback to string representation
-        return {
-            "type": "str",
-            "data": str(obj),
-            "error": str(e)
-        }
+    # Fallback to string representation
+    return {"type": "str", "data": str(obj)}
 
 def deserialize_object(serialized: Dict[str, Any]) -> Any:
     """
@@ -66,20 +70,40 @@ def deserialize_object(serialized: Dict[str, Any]) -> Any:
     data = serialized.get("data")
     
     if obj_type == "json":
+        # Check if it's a serialized object with class info
+        if isinstance(data, dict) and '__class__' in data and '__module__' in data:
+            class_name = data['__class__']
+            module_name = data['__module__']
+            
+            # Try to reconstruct the object
+            if class_name == 'NumberValue' and 'aim_params' in module_name:
+                # Import here to avoid circular imports
+                from aim_params.values.number import NumberValue
+                # Remove metadata fields before reconstruction
+                obj_data = {k: v for k, v in data.items() if not k.startswith('__')}
+                return NumberValue.from_dict(obj_data)
+            
+            # For other objects, return the dict without metadata
+            return {k: v for k, v in data.items() if not k.startswith('__')}
+        
+        # Check if dict contains serialized objects
+        if isinstance(data, dict):
+            deserialized_dict = {}
+            for key, value in data.items():
+                if isinstance(value, dict) and '__class__' in value:
+                    # Recursively deserialize nested objects
+                    deserialized_dict[key] = deserialize_object({"type": "json", "data": value})
+                else:
+                    deserialized_dict[key] = value
+            return deserialized_dict
+        
         return data
-    elif obj_type == "pickle":
-        try:
-            decoded = base64.b64decode(data)
-            return pickle.loads(decoded)
-        except Exception as e:
-            print(f"Warning: Failed to deserialize pickle object: {e}")
-            return data
     elif obj_type == "str":
         return data
     else:
         return serialized
 
-def execute_pipeline(project_id: str, use_pickle: bool = True) -> Dict[str, Any]:
+def execute_pipeline(project_id: str) -> Dict[str, Any]:
     """
     Execute all nodes in a pipeline following the edge connections
     """
@@ -165,8 +189,6 @@ def execute_pipeline(project_id: str, use_pickle: bool = True) -> Dict[str, Any]
                 # Create execution code with data passing
                 execution_code = f"""
 import json
-import pickle
-import base64
 import sys
 import os
 
@@ -189,42 +211,80 @@ def deserialize_object(serialized):
     data = serialized.get("data")
     
     if obj_type == "json":
+        # Check if it's a serialized object with class info
+        if isinstance(data, dict) and '__class__' in data and '__module__' in data:
+            class_name = data['__class__']
+            module_name = data['__module__']
+            
+            # Try to reconstruct the object
+            if class_name == 'NumberValue' and 'aim_params' in module_name:
+                from aim_params.values.number import NumberValue
+                # Remove metadata fields before reconstruction
+                obj_data = {{k: v for k, v in data.items() if not k.startswith('__')}}
+                return NumberValue.from_dict(obj_data)
+            
+            # For other objects or if reconstruction fails, return the dict
+            return {{k: v for k, v in data.items() if not k.startswith('__')}}
+        
+        # Check if dict contains serialized objects
+        if isinstance(data, dict):
+            deserialized_dict = {{}}
+            for key, value in data.items():
+                if isinstance(value, dict) and '__class__' in value:
+                    # Recursively deserialize nested objects
+                    deserialized_dict[key] = deserialize_object({{"type": "json", "data": value}})
+                else:
+                    deserialized_dict[key] = value
+            return deserialized_dict
+        
         return data
-    elif obj_type == "pickle":
-        try:
-            decoded = base64.b64decode(data)
-            return pickle.loads(decoded)
-        except Exception as e:
-            print(f"Warning: Failed to deserialize: {{e}}", file=sys.stderr)
-            return data
     elif obj_type == "str":
         return data
     else:
         return serialized
 
 # Serialization helper
-def serialize_object(obj, use_pickle=True):
-    if not use_pickle or isinstance(obj, (dict, list, str, int, float, bool, type(None))):
+def serialize_object(obj):
+    # First try to serialize as JSON if object has to_dict method
+    if hasattr(obj, 'to_dict'):
         try:
-            json.dumps(obj)
-            return {{"type": "json", "data": obj}}
+            obj_dict = obj.to_dict()
+            # Add type info for reconstruction
+            obj_dict['__class__'] = obj.__class__.__name__
+            obj_dict['__module__'] = obj.__class__.__module__
+            return {{"type": "json", "data": obj_dict}}
+        except Exception:
+            pass  # Fall back to other methods
+    
+    # Try standard JSON serialization
+    if isinstance(obj, (dict, list, str, int, float, bool, type(None))):
+        try:
+            # Check if dict contains serializable objects
+            if isinstance(obj, dict):
+                serialized_dict = {{}}
+                for key, value in obj.items():
+                    if hasattr(value, 'to_dict'):
+                        serialized_dict[key] = value.to_dict()
+                        serialized_dict[key]['__class__'] = value.__class__.__name__
+                        serialized_dict[key]['__module__'] = value.__class__.__module__
+                    else:
+                        serialized_dict[key] = value
+                json.dumps(serialized_dict)  # Test if serializable
+                return {{"type": "json", "data": serialized_dict}}
+            else:
+                json.dumps(obj)
+                return {{"type": "json", "data": obj}}
         except (TypeError, ValueError):
             pass
     
-    try:
-        pickled = pickle.dumps(obj)
-        encoded = base64.b64encode(pickled).decode('utf-8')
-        return {{
-            "type": "pickle",
-            "data": encoded,
-            "class": obj.__class__.__name__ if hasattr(obj, '__class__') else "unknown"
-        }}
-    except Exception as e:
-        return {{"type": "str", "data": str(obj), "error": str(e)}}
+    # Fallback to string representation
+    return {{"type": "str", "data": str(obj)}}
 
 # Input data from previous nodes - deserialize each input separately
 input_data_deserialized = {{}}
-for key, value in ({json.dumps(input_data)}).items():
+# Use json.loads to properly convert JSON to Python dict
+input_data_dict = json.loads('{json.dumps(input_data)}')
+for key, value in input_data_dict.items():
     input_data_deserialized[key] = deserialize_object(value)
 input_data = input_data_deserialized
 
@@ -235,7 +295,7 @@ output_data = {{}}
 {code}
 
 # Serialize and output the result
-output_serialized = serialize_object(output_data, use_pickle={use_pickle})
+output_serialized = serialize_object(output_data)
 print("___OUTPUT_DATA_START___")
 print(json.dumps(output_serialized))
 print("___OUTPUT_DATA_END___")
@@ -295,12 +355,8 @@ print("___OUTPUT_DATA_END___")
                         "output_data": output_data
                     }
                     
-                    # Add serialization info if using pickle
-                    if output_data_raw and output_data_raw.get("type") == "pickle":
-                        result_data["output_type"] = "object"
-                        result_data["output_class"] = output_data_raw.get("class", "unknown")
-                    else:
-                        result_data["output_type"] = "json"
+                    # Add serialization info
+                    result_data["output_type"] = "json"
                     
                     results.append(result_data)
                     

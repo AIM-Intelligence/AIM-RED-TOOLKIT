@@ -22,7 +22,6 @@ export default function RunPipelineButton({ projectId, onResults }: RunPipelineB
         },
         body: JSON.stringify({
           project_id: projectId,
-          use_pickle: true,  // 항상 객체 전달 사용
         }),
       });
 
