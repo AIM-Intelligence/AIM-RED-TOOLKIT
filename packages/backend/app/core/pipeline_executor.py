@@ -75,16 +75,14 @@ def deserialize_object(serialized: Dict[str, Any]) -> Any:
             class_name = data['__class__']
             module_name = data['__module__']
             
-            # Try to reconstruct the object
-            if class_name == 'NumberValue' and 'aim_params' in module_name:
-                # Import here to avoid circular imports
-                from aim_params.values.number import NumberValue
-                # Remove metadata fields before reconstruction
-                obj_data = {k: v for k, v in data.items() if not k.startswith('__')}
-                return NumberValue.from_dict(obj_data)
+            # For display purposes, we don't need to reconstruct the actual objects
+            # Just return a cleaned dict representation
+            # Remove metadata fields
+            obj_data = {k: v for k, v in data.items() if not k.startswith('__')}
             
-            # For other objects, return the dict without metadata
-            return {k: v for k, v in data.items() if not k.startswith('__')}
+            # Add a type indicator for display
+            obj_data['_type'] = class_name
+            return obj_data
         
         # Check if dict contains serialized objects
         if isinstance(data, dict):
@@ -222,6 +220,18 @@ def deserialize_object(serialized):
                 # Remove metadata fields before reconstruction
                 obj_data = {{k: v for k, v in data.items() if not k.startswith('__')}}
                 return NumberValue.from_dict(obj_data)
+            elif class_name == 'ModelResponse' and 'aim_models' in module_name:
+                # Handle ModelResponse deserialization
+                from aim_models.core.response import ModelResponse, TokenUsage
+                obj_data = {{k: v for k, v in data.items() if not k.startswith('__')}}
+                # Reconstruct TokenUsage if present
+                if 'usage' in obj_data and isinstance(obj_data['usage'], dict):
+                    obj_data['usage'] = TokenUsage(**obj_data['usage'])
+                # Convert timestamp string back to datetime if needed
+                if 'timestamp' in obj_data and isinstance(obj_data['timestamp'], str):
+                    from datetime import datetime
+                    obj_data['timestamp'] = datetime.fromisoformat(obj_data['timestamp'])
+                return ModelResponse(**obj_data)
             
             # For other objects or if reconstruction fails, return the dict
             return {{k: v for k, v in data.items() if not k.startswith('__')}}
@@ -283,7 +293,9 @@ def serialize_object(obj):
 # Input data from previous nodes - deserialize each input separately
 input_data_deserialized = {{}}
 # Use json.loads to properly convert JSON to Python dict
-input_data_dict = json.loads('{json.dumps(input_data)}')
+# Use triple quotes to avoid issues with nested quotes
+input_data_json = '''{json.dumps(input_data)}'''
+input_data_dict = json.loads(input_data_json)
 for key, value in input_data_dict.items():
     input_data_deserialized[key] = deserialize_object(value)
 input_data = input_data_deserialized
@@ -330,19 +342,25 @@ print("___OUTPUT_DATA_END___")
                         start = output.index("___OUTPUT_DATA_START___") + len("___OUTPUT_DATA_START___")
                         end = output.index("___OUTPUT_DATA_END___")
                         data_str = output[start:end].strip()
+                        print(f"[DEBUG] Node {node_id} raw output data: {data_str[:200]}...")
                         try:
                             # Parse serialized output
                             output_data_raw = json.loads(data_str)
+                            print(f"[DEBUG] Node {node_id} parsed output_data_raw: {output_data_raw}")
                             # Store serialized form for next nodes
                             node_outputs[node_id] = output_data_raw
                             # Deserialize for display
                             output_data = deserialize_object(output_data_raw)
-                        except:
-                            pass
+                            print(f"[DEBUG] Node {node_id} deserialized output_data: {output_data}")
+                        except Exception as e:
+                            print(f"[ERROR] Error parsing output data for node {node_id}: {e}")
+                            print(f"[ERROR] Data string: {data_str[:500]}...")  # More chars for debugging
                         
                         # Clean output
                         output = output[:output.index("___OUTPUT_DATA_START___")].strip()
                     else:
+                        print(f"[DEBUG] Node {node_id} has no output data markers")
+                        print(f"[DEBUG] Output preview: {output[:200]}...")
                         node_outputs[node_id] = {"type": "json", "data": {}}
                     
                     # Prepare result with metadata

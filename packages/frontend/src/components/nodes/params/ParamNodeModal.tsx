@@ -130,6 +130,7 @@ This node creates a NumberValue parameter that can be passed to other nodes
 
 from aim_params import NumberValue
 from aim_params.core.metadata import UIMetadata
+import json
 
 # Parameter configuration
 param_name = "${formData.paramName}"
@@ -182,7 +183,13 @@ output_data = {
         "unit": unit,
         "integer_only": integer_only
     }
-}`;
+}
+
+# Serialize and output for next nodes
+serialized_output = serialize_object(output_data)
+print("___OUTPUT_DATA_START___")
+print(json.dumps(serialized_output))
+print("___OUTPUT_DATA_END___")`;
   };
 
   const handleInputChange = (field: string, value: any) => {

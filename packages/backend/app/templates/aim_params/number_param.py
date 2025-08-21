@@ -5,6 +5,7 @@ This node creates a NumberValue parameter that can be passed to other nodes
 
 from aim_params import NumberValue
 from aim_params.core.metadata import UIMetadata
+import json
 
 # Parameter configuration from user input
 param_name = "{{PARAM_NAME}}"
@@ -26,7 +27,7 @@ param = NumberValue(
         description=param_description,
         default=value,
         required=True,
-        editable=True
+        editable=True,
     ),
     value=value,
     min_value=min_value if min_value is not None else None,
@@ -34,7 +35,7 @@ param = NumberValue(
     step=step if step > 0 else None,
     unit=unit if unit else None,
     precision=precision if precision >= 0 else None,
-    integer_only=integer_only
+    integer_only=integer_only,
 )
 
 # Display parameter info
@@ -55,6 +56,12 @@ output_data = {
         "max": max_value,
         "step": step,
         "unit": unit,
-        "integer_only": integer_only
-    }
+        "integer_only": integer_only,
+    },
 }
+
+# Serialize and output for next nodes
+serialized_output = serialize_object(output_data)
+print("___OUTPUT_DATA_START___")
+print(json.dumps(serialized_output))
+print("___OUTPUT_DATA_END___")

@@ -21,10 +21,9 @@ import type { DefaultNodeType } from "../../components/nodes/DefaultNode";
 import DefaultNode from "../../components/nodes/DefaultNode";
 import type { NumberParamNodeType } from "../../components/nodes/params/NumberParamNode";
 import NumberParamNode from "../../components/nodes/params/NumberParamNode";
-import type { CustomCalculatorNodeType } from "../../components/nodes/CustomCalculatorNode";
-import CustomCalculatorNode from "../../components/nodes/CustomCalculatorNode";
 import type { SimpleAddNodeType } from "../../components/nodes/SimpleAddNode";
 import SimpleAddNode from "../../components/nodes/SimpleAddNode";
+import MockModelNode from "../../components/nodes/MockModelNode";
 import DefaultEdge from "../../components/edges/DefaultEdge";
 import IdeModal from "../../components/modal/Ide";
 import { removeStyle } from "./removeStyle";
@@ -169,7 +168,7 @@ export default function Project() {
           setProjectTitle(project.project_name || "");
 
           // Transform backend nodes to ReactFlow format
-          const transformedNodes: (DefaultNodeType | NumberParamNodeType | CustomCalculatorNodeType | SimpleAddNodeType)[] = project.nodes.map(
+          const transformedNodes: (DefaultNodeType | NumberParamNodeType | SimpleAddNodeType)[] = project.nodes.map(
             (node: BackendNode) => {
               if (node.type === "numberParam") {
                 // For NumberParam nodes, provide all required data
@@ -199,25 +198,6 @@ export default function Project() {
                     },
                   },
                 } as NumberParamNodeType;
-              } else if (node.type === "customCalculator") {
-                // For CustomCalculator nodes
-                return {
-                  id: node.id,
-                  type: "customCalculator",
-                  position: node.position,
-                  data: {
-                    title: node.data.title || `Calculator ${node.id}`,
-                    description: node.data.description || "Calculates values from inputs",
-                    operation: "add" as const,
-                    viewCode: () => {
-                      setSelectedNodeData({
-                        nodeId: node.id,
-                        title: node.data.title || `Calculator ${node.id}`,
-                      });
-                      setIsIdeModalOpen(true);
-                    },
-                  },
-                } as CustomCalculatorNodeType;
               } else if (node.type === "simpleAdd") {
                 // For SimpleAdd nodes
                 return {
@@ -236,6 +216,24 @@ export default function Project() {
                     },
                   },
                 } as SimpleAddNodeType;
+              } else if (node.type === "mockModel") {
+                // For MockModel nodes
+                return {
+                  id: node.id,
+                  type: "mockModel",
+                  position: node.position,
+                  data: {
+                    title: node.data.title || `Mock Model ${node.id}`,
+                    description: node.data.description || "Simulates model generation",
+                    viewCode: () => {
+                      setSelectedNodeData({
+                        nodeId: node.id,
+                        title: node.data.title || `Mock Model ${node.id}`,
+                      });
+                      setIsIdeModalOpen(true);
+                    },
+                  },
+                };
               } else {
                 // Default node type
                 return {
@@ -417,8 +415,8 @@ export default function Project() {
     () => ({
       default: DefaultNode,
       numberParam: NumberParamNode,
-      customCalculator: CustomCalculatorNode,
       simpleAdd: SimpleAddNode,
+      mockModel: MockModelNode,
     }),
     []
   );
@@ -481,7 +479,7 @@ export default function Project() {
   );
 
   // 새 노드 추가
-  const addNewNode = useCallback(async (nodeType: "default" | "numberParam" | "customCalculator" | "simpleAdd" = "default") => {
+  const addNewNode = useCallback(async (nodeType: "default" | "numberParam" | "simpleAdd" | "mockModel" = "default") => {
     const nodeId = nodeIdCounter.toString();
     
     if (nodeType === "numberParam") {
@@ -576,8 +574,6 @@ param = NumberValue(
 print(f"Created NumberValue parameter: {param_name}")
 print(f"  Label: {param_label}")
 print(f"  Value: {param.format_display()}")
-print(f"  Range: {min_value} - {max_value}")
-print(f"  Integer only: {integer_only}")
 
 # Pass parameter to next nodes
 output_data = {
@@ -593,100 +589,6 @@ output_data = {
         "integer_only": integer_only
     }
 }`;
-        
-        await fetch("/api/code/savecode", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            project_id: projectId,
-            node_id: nodeId,
-            code: code,
-          }),
-        });
-      } catch (error) {
-        console.error("Error saving node code:", error);
-      }
-    } else if (nodeType === "customCalculator") {
-      const newNode: CustomCalculatorNodeType = {
-        id: nodeId,
-        type: "customCalculator",
-        position: {
-          x: Math.random() * 500 + 100,
-          y: Math.random() * 300 + 100,
-        },
-        data: {
-          title: `Calculator ${nodeIdCounter}`,
-          description: "Calculates values from inputs",
-          operation: "add",
-          viewCode: () => handleNodeClick(nodeId, `Calculator ${nodeIdCounter}`),
-        },
-      };
-      setNodes((nds) => [...nds, newNode as any]);
-      
-      // Create node in backend
-      try {
-        const createNodeResponse = await fetch("/api/project/makenode", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            project_id: projectId,
-            node_id: nodeId,
-            node_type: "customCalculator",
-            position: newNode.position,
-            data: {
-              title: newNode.data.title,
-              description: newNode.data.description,
-            },
-          }),
-        });
-        
-        if (!createNodeResponse.ok) {
-          console.error("Failed to create node in backend");
-        }
-        
-        // Save the calculator code
-        const code = `"""
-Custom Calculator Node
-This node receives two number parameters and performs a calculation
-"""
-
-# input_data is already provided by the pipeline executor
-# It contains data from all connected nodes
-
-print("Received input_data:", input_data)
-
-# Extract values from connected NumberParam nodes
-values = []
-for node_key, data in input_data.items():
-    if isinstance(data, dict) and 'parameter' in data:
-        # This is a NumberValue parameter object
-        param = data['parameter']
-        # Access the value attribute of the parameter
-        if hasattr(param, 'value'):
-            values.append(param.value)
-            print(f"Received parameter value: {param.value}")
-    elif isinstance(data, dict) and 'value' in data:
-        # Direct value from node
-        values.append(data['value'])
-        print(f"Received direct value: {data['value']}")
-
-# Perform calculation
-if len(values) >= 2:
-    val1, val2 = values[0], values[1]
-    result = val1 + val2
-    print(f"\nCalculation: {val1} + {val2} = {result}")
-else:
-    result = 0
-    print(f"Not enough inputs. Need 2 values, got {len(values)}")
-
-# Pass the result to next nodes
-output_data = {
-    "result": result,
-    "operation": "add",
-    "inputs": values
-}
-
-print(f"\nOutput: {output_data}")`;
         
         await fetch("/api/code/savecode", {
           method: "POST",
@@ -789,6 +691,88 @@ output_data = {"value": result}`;
       } catch (error) {
         console.error("Error saving node code:", error);
       }
+    } else if (nodeType === "mockModel") {
+      const newNode = {
+        id: nodeId,
+        type: "mockModel",
+        position: {
+          x: Math.random() * 500 + 100,
+          y: Math.random() * 300 + 100,
+        },
+        data: {
+          title: `Mock Model ${nodeIdCounter}`,
+          description: "Simulates model generation",
+          viewCode: () => handleNodeClick(nodeId, `Mock Model ${nodeIdCounter}`),
+        },
+      };
+      setNodes((nds) => [...nds, newNode]);
+      
+      // Create node in backend
+      try {
+        const createNodeResponse = await fetch("/api/project/makenode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            node_id: nodeId,
+            node_type: "mockModel",
+            position: newNode.position,
+            data: {
+              title: newNode.data.title,
+              description: newNode.data.description,
+            },
+          }),
+        });
+        
+        if (!createNodeResponse.ok) {
+          console.error("Failed to create mock model node in backend");
+        }
+        
+        // Save the mock model template code
+        const mockModelCode = await fetch("/api/code/gettemplate/mock_model")
+          .then(res => res.text())
+          .catch(() => `# Mock Model Node
+# Simulates model generation based on temperature
+
+# Get temperature parameter
+temperature = 1.0
+if 'temperature' in input_data:
+    temp_data = input_data['temperature']
+    if 'parameter' in temp_data and hasattr(temp_data['parameter'], 'value'):
+        temperature = temp_data['parameter'].value
+    elif 'value' in temp_data:
+        temperature = temp_data['value']
+
+# Generate response based on temperature
+if temperature < 0.5:
+    response = "Low temperature: Deterministic output"
+elif temperature < 1.0:
+    response = "Medium temperature: Balanced output"  
+else:
+    response = f"High temperature ({temperature:.2f}): Creative output"
+
+print(f"Temperature: {temperature}")
+print(f"Response: {response}")
+
+# Output
+output_data = {
+    "generated_text": response,
+    "temperature_used": temperature,
+    "model": "mock-gpt"
+}`);
+        
+        await fetch("/api/code/savecode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            node_id: nodeId,
+            code: mockModelCode,
+          }),
+        });
+      } catch (error) {
+        console.error("Error creating mock model node:", error);
+      }
     } else {
       const newNode: DefaultNodeType = {
         id: nodeId,
@@ -857,6 +841,7 @@ output_data = {}`;
   useEffect(() => {
     const handleDeleteNode = async (event: CustomEvent) => {
       const nodeId = event.detail.id;
+      console.log('Project: Received deleteNode event for:', nodeId);
       
       // Delete from backend
       try {
@@ -1091,16 +1076,16 @@ output_data = {}`;
               + Number Param
             </button>
             <button
-              onClick={() => addNewNode("customCalculator")}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium"
-            >
-              + Calculator
-            </button>
-            <button
               onClick={() => addNewNode("simpleAdd")}
               className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm font-medium"
             >
               + Add
+            </button>
+            <button
+              onClick={() => addNewNode("mockModel")}
+              className="px-4 py-2 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded hover:from-yellow-600 hover:to-orange-700 transition-all text-sm font-medium"
+            >
+              🤖 Mock Model
             </button>
             <RunPipelineButton projectId={projectId} />
             <div className="text-gray-400 text-sm">

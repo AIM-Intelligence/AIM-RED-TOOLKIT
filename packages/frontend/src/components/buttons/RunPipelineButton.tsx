@@ -27,6 +27,13 @@ export default function RunPipelineButton({ projectId, onResults }: RunPipelineB
 
       if (response.ok) {
         const result = await response.json();
+        console.log('Pipeline execution result:', result);
+        // Log each node's output_data
+        if (result.results) {
+          result.results.forEach((node: any) => {
+            console.log(`Node ${node.node_id} output_data:`, node.output_data);
+          });
+        }
         setPipelineResults(result);
         setShowResults(true);
         
@@ -92,7 +99,7 @@ export default function RunPipelineButton({ projectId, onResults }: RunPipelineB
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <path d="M8 5v14l11-7z" />
             </svg>
-            파이프라인 실행
+            Run
           </>
         )}
       </button>

@@ -1,5 +1,6 @@
 # Universal Node Template - Works with any input configuration
 # 이 템플릿은 커스텀 노드에서도 작동합니다
+import json
 
 print("Input data keys:", list(input_data.keys()))
 
@@ -52,3 +53,9 @@ print(f"Result: {result}")
 
 # Output
 output_data = {"value": result}
+
+# Serialize and output for next nodes
+serialized_output = serialize_object(output_data)
+print("___OUTPUT_DATA_START___")
+print(json.dumps(serialized_output))
+print("___OUTPUT_DATA_END___")
