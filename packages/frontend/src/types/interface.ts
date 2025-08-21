@@ -13,8 +13,6 @@ export interface NodeData {
   title: string;
   description?: string;
   file?: string;
-  // Additional fields that might be present in the data
-  code?: string; // Initial code for new nodes
 }
 
 export interface EdgeMarkerEnd {

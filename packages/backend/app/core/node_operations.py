@@ -13,11 +13,11 @@ def create_node(project_id: str, node_id: str, node_type: str, position: Dict[st
     node_title = data.get('title', f'node_{node_id}')
     
     # Create python file for the node
-    py_filename = f"{node_id}_{node_title}.py".replace(" ", "_").replace("/", "_")
+    py_filename = f"{node_id}_{node_title}.py".replace(" ", "_").replace("/", "__")
     py_filepath = project_path / py_filename
     
     # Create empty python file with basic template
-    initial_code = data.get('code', f"# Node: {node_title}\n# ID: {node_id}\n\n# Write your Python code here\nprint('Hello, World!')")
+    initial_code = f"# Node: {node_title}\n# ID: {node_id}\n\n# Write your Python code here\nprint('Hello, World!')"
     with open(py_filepath, 'w') as f:
         f.write(initial_code)
     

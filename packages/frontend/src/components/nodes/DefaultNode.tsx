@@ -5,6 +5,7 @@ import clsx from "clsx";
 export type DefaultNodeType = Node<{
   title: string;
   description: string;
+  file?: string; // File path reference for the node's Python code
   viewCode: () => void;
 }>;
 

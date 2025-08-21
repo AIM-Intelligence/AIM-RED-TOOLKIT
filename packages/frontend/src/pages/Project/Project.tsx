@@ -3,7 +3,6 @@ import { useParams } from "react-router-dom";
 import {
   ReactFlow,
   MiniMap,
-  Controls,
   Background,
   BackgroundVariant,
   useNodesState,
@@ -26,7 +25,6 @@ import Loading from "../../components/loading/Loading";
 import WrongPath from "../WrongPath/WrongPath";
 import { projectApi } from "../../utils/api";
 import type { ProjectNode, ProjectEdge, ProjectStructure } from "../../types";
-
 
 export default function Project() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -94,6 +92,7 @@ export default function Project() {
               data: {
                 title: node.data.title || `Node ${node.id}`,
                 description: node.data.description || "",
+                file: node.data.file, // Include file reference from backend
                 viewCode: () => {
                   setSelectedNodeData({
                     nodeId: node.id,
@@ -195,7 +194,9 @@ export default function Project() {
 
   // 연결 생성 핸들러
   const onConnect = useCallback(
-    (connection: Connection) => {
+    async (connection: Connection) => {
+      if (!projectId) return;
+
       // 중복 연결 검사
       const isDuplicate = edges.some(
         (edge) =>
@@ -210,77 +211,197 @@ export default function Project() {
         return;
       }
 
-      // addEdge 함수 사용 - type: "custom" 추가
-      setEdges((eds) =>
-        addEdge(
-          {
-            ...connection,
-            id: `e${connection.source}-${connection.target}-${Date.now()}`,
-            type: "custom",
-            style: { stroke: "#64748b", strokeWidth: 2 },
-            markerEnd: { type: MarkerType.ArrowClosed },
-          },
-          eds
-        )
-      );
+      const edgeId = `e${connection.source}-${connection.target}-${Date.now()}`;
+
+      try {
+        // Call API to create edge on backend
+        const response = await projectApi.createEdge({
+          project_id: projectId,
+          edge_id: edgeId,
+          edge_type: "custom",
+          source: connection.source!,
+          target: connection.target!,
+          marker_end: { type: MarkerType.ArrowClosed },
+        });
+
+        if (response.success) {
+          // Add edge to frontend after successful backend creation
+          setEdges((eds) =>
+            addEdge(
+              {
+                ...connection,
+                id: edgeId,
+                type: "custom",
+                style: { stroke: "#64748b", strokeWidth: 2 },
+                markerEnd: { type: MarkerType.ArrowClosed },
+              },
+              eds
+            )
+          );
+        }
+      } catch (error) {
+        console.error("Failed to create edge:", error);
+        alert(
+          `Failed to create edge: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`
+        );
+      }
     },
-    [edges, setEdges]
+    [edges, setEdges, projectId]
   );
 
   // 새 노드 추가
-  const addNewNode = useCallback(() => {
+  const addNewNode = useCallback(async () => {
+    if (!projectId) return;
+
     const nodeId = nodeIdCounter.toString();
-    const newNode: DefaultNodeType = {
-      id: nodeId,
-      type: "default",
-      position: {
-        x: Math.random() * 500 + 100,
-        y: Math.random() * 300 + 100,
-      },
-      data: {
-        title: `Node ${nodeIdCounter}`,
-        description: "New node description",
-        viewCode: () => handleNodeClick(nodeId, `Node ${nodeIdCounter}`),
-      },
+    const nodeTitle = `Node ${nodeIdCounter}`;
+    const position = {
+      x: Math.random() * 500 + 100,
+      y: Math.random() * 300 + 100,
     };
-    setNodes((nds) => [...nds, newNode]);
-    setNodeIdCounter((id) => id + 1);
-  }, [nodeIdCounter, setNodes]);
+
+    try {
+      // Call API to create node on backend
+      const response = await projectApi.createNode({
+        project_id: projectId,
+        node_id: nodeId,
+        node_type: "default",
+        position: position,
+        data: {
+          title: nodeTitle,
+          description: "New node description",
+        },
+      });
+
+      if (response.success) {
+        // Add node to frontend after successful backend creation
+        const newNode: DefaultNodeType = {
+          id: nodeId,
+          type: "default",
+          position: position,
+          data: {
+            title: nodeTitle,
+            description: "New node description",
+            file: response.node.data.file, // Include file reference from backend
+            viewCode: () => handleNodeClick(nodeId, nodeTitle),
+          },
+        };
+        setNodes((nds) => [...nds, newNode]);
+        setNodeIdCounter((id) => id + 1);
+      }
+    } catch (error) {
+      console.error("Failed to create node:", error);
+      alert(
+        `Failed to create node: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  }, [nodeIdCounter, setNodes, projectId]);
 
   // 노드 삭제 핸들러
   useEffect(() => {
-    const handleDeleteNode = (event: CustomEvent) => {
-      const nodeId = event.detail.id;
+    const deleteNodeAsync = async (nodeId: string) => {
+      if (!projectId) return;
+      
+      // Store current state for rollback
+      const previousNodes = nodes;
+      const previousEdges = edges;
+      
+      // Optimistic update - immediately remove from UI
       setNodes((nds) => nds.filter((node) => node.id !== nodeId));
       setEdges((eds) =>
-        eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
+        eds.filter(
+          (edge) => edge.source !== nodeId && edge.target !== nodeId
+        )
       );
+
+      try {
+        // Call API to delete node on backend
+        const response = await projectApi.deleteNode({
+          project_id: projectId,
+          node_id: nodeId,
+        });
+
+        if (!response.success) {
+          // Rollback on failure
+          setNodes(previousNodes);
+          setEdges(previousEdges);
+          alert("Failed to delete node");
+        }
+      } catch (error) {
+        // Rollback on error
+        setNodes(previousNodes);
+        setEdges(previousEdges);
+        console.error("Failed to delete node:", error);
+        alert(
+          `Failed to delete node: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`
+        );
+      }
     };
 
-    document.addEventListener("deleteNode", handleDeleteNode as EventListener);
-    return () => {
-      document.removeEventListener(
-        "deleteNode",
-        handleDeleteNode as EventListener
-      );
+    const handleDeleteNode = (event: Event) => {
+      const customEvent = event as CustomEvent<{ id: string }>;
+      const nodeId = customEvent.detail.id;
+      deleteNodeAsync(nodeId);
     };
-  }, [setNodes, setEdges]);
+
+    document.addEventListener("deleteNode", handleDeleteNode);
+    return () => {
+      document.removeEventListener("deleteNode", handleDeleteNode);
+    };
+  }, [setNodes, setEdges, projectId, nodes, edges]);
 
   // Edge 삭제 핸들러 - 추가
   useEffect(() => {
-    const handleDeleteEdge = (event: CustomEvent) => {
-      const edgeId = event.detail.id;
+    const deleteEdgeAsync = async (edgeId: string) => {
+      if (!projectId) return;
+      
+      // Store current state for rollback
+      const previousEdges = edges;
+      
+      // Optimistic update - immediately remove from UI
       setEdges((eds) => eds.filter((edge) => edge.id !== edgeId));
+
+      try {
+        // Call API to delete edge on backend
+        const response = await projectApi.deleteEdge({
+          project_id: projectId,
+          edge_id: edgeId,
+        });
+
+        if (!response.success) {
+          // Rollback on failure
+          setEdges(previousEdges);
+          alert("Failed to delete edge");
+        }
+      } catch (error) {
+        // Rollback on error
+        setEdges(previousEdges);
+        console.error("Failed to delete edge:", error);
+        alert(
+          `Failed to delete edge: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`
+        );
+      }
     };
 
-    document.addEventListener("deleteEdge", handleDeleteEdge as EventListener);
-    return () => {
-      document.removeEventListener(
-        "deleteEdge",
-        handleDeleteEdge as EventListener
-      );
+    const handleDeleteEdge = (event: Event) => {
+      const customEvent = event as CustomEvent<{ id: string }>;
+      const edgeId = customEvent.detail.id;
+      deleteEdgeAsync(edgeId);
     };
-  }, [setEdges]);
+
+    document.addEventListener("deleteEdge", handleDeleteEdge);
+    return () => {
+      document.removeEventListener("deleteEdge", handleDeleteEdge);
+    };
+  }, [setEdges, projectId, edges]);
 
   // MiniMap 노드 색상 함수
   const nodeColor = () => {
@@ -356,22 +477,18 @@ export default function Project() {
         deleteKeyCode={null} // Delete 키로 삭제 비활성화
       >
         <Background
-          variant={BackgroundVariant.Dots}
+          variant={BackgroundVariant.Cross}
           gap={20}
           size={1}
           color="#374151"
-        />
-
-        <Controls
-          className="bg-gray-800 border-gray-700"
-          showInteractive={false}
+          bgColor="#000000"
         />
 
         <MiniMap
           nodeColor={nodeColor}
           nodeStrokeColor="#374151"
           nodeStrokeWidth={2}
-          className="bg-gray-900 border-2 border-gray-700"
+          className="bg-neutral-900 border-2 border-neutral-700"
           maskColor="rgba(0, 0, 0, 0.5)"
           pannable
           zoomable
@@ -379,13 +496,13 @@ export default function Project() {
 
         <Panel
           position="top-left"
-          className="bg-gray-800 p-4 rounded-lg border border-gray-700"
+          className="bg-neutral-800 p-4 rounded-lg border border-neutral-700"
         >
-          <div className="flex gap-3 items-center">
+          <div className="flex flex-col gap-3 items-center">
             <h1>{projectTitle}</h1>
             <button
               onClick={addNewNode}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm font-medium"
+              className="px-4 py-2 bg-red-700 text-white rounded hover:bg-red-800 transition-colors text-sm font-medium"
             >
               + Add Node
             </button>
