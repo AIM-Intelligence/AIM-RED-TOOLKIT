@@ -1,6 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import IdeModal from "../../components/modal/Ide";
+import SetupModal from "../../components/modal/SetupModal";
 import Loading from "../../components/loading/Loading";
 import WrongPath from "../WrongPath/WrongPath";
 import ProjectPanel from "./layouts/ProjectPanel";
@@ -17,6 +18,7 @@ export default function Project() {
 
   // UI State
   const [isIdeModalOpen, setIsIdeModalOpen] = useState(false);
+  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [selectedNodeData, setSelectedNodeData] = useState<{
     nodeId: string;
     title: string;
@@ -72,22 +74,33 @@ export default function Project() {
     setEdges,
   });
 
+  // Check if there's already a start node
+  const hasStartNode = useMemo(() => {
+    return nodes.some(node => node.type === "start");
+  }, [nodes]);
+
+  // Handle SetupModal confirm
+  const handleSetupConfirm = useCallback(async (nodeData: {
+    title: string;
+    description: string;
+    nodeType: "default" | "start" | "result";
+  }) => {
+    await addNewNode(nodeData);
+    setIsSetupModalOpen(false);
+  }, [addNewNode]);
+
   // Handle retry
   const handleRetry = useCallback(() => {
     window.location.reload();
   }, []);
 
   // Conditional rendering
-  if (!projectId) {
+  if (!projectId || isInvalidProject) {
     return <WrongPath />;
   }
 
   if (isLoading) {
     return <Loading />;
-  }
-
-  if (isInvalidProject) {
-    return <WrongPath />;
   }
 
   if (error) {
@@ -106,7 +119,7 @@ export default function Project() {
       >
         <ProjectPanel
           projectTitle={projectTitle}
-          addNewNode={addNewNode}
+          onAddNodeClick={() => setIsSetupModalOpen(true)}
           nodeCount={nodes.length}
           edgeCount={edges.length}
         />
@@ -120,6 +133,14 @@ export default function Project() {
         projectTitle={projectTitle}
         nodeId={selectedNodeData.nodeId}
         nodeTitle={selectedNodeData.title}
+      />
+
+      {/* Setup Modal for creating new nodes */}
+      <SetupModal
+        isOpen={isSetupModalOpen}
+        onClose={() => setIsSetupModalOpen(false)}
+        onConfirm={handleSetupConfirm}
+        hasStartNode={hasStartNode}
       />
     </>
   );

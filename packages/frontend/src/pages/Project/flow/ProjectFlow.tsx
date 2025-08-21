@@ -20,8 +20,8 @@ import DefaultEdge from "../../../components/edges/DefaultEdge";
 interface ProjectFlowProps {
   nodes: DefaultNodeType[];
   edges: Edge[];
-  onNodesChange: OnNodesChange;
-  onEdgesChange: OnEdgesChange;
+  onNodesChange: OnNodesChange<DefaultNodeType>;
+  onEdgesChange: OnEdgesChange<Edge>;
   onConnect: (connection: Connection) => void;
   isValidConnection: (connection: Edge | Connection) => boolean;
   children?: ReactNode;

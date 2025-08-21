@@ -1,5 +1,10 @@
 import { useCallback, useEffect } from "react";
-import { useNodesState, useEdgesState, type OnNodesChange, type OnEdgesChange } from "@xyflow/react";
+import {
+  useNodesState,
+  useEdgesState,
+  type OnNodesChange,
+  type OnEdgesChange,
+} from "@xyflow/react";
 import type { Edge } from "@xyflow/react";
 import { projectApi } from "../utils/api";
 import type { DefaultNodeType } from "../components/nodes/DefaultNode";
@@ -18,9 +23,13 @@ interface UseNodeOperationsReturn {
   edges: Edge[];
   setNodes: React.Dispatch<React.SetStateAction<DefaultNodeType[]>>;
   setEdges: React.Dispatch<React.SetStateAction<Edge[]>>;
-  onNodesChange: OnNodesChange;
-  onEdgesChange: OnEdgesChange;
-  addNewNode: () => Promise<void>;
+  onNodesChange: OnNodesChange<DefaultNodeType>;
+  onEdgesChange: OnEdgesChange<Edge>;
+  addNewNode: (nodeData: {
+    title: string;
+    description: string;
+    nodeType: "default" | "start" | "result";
+  }) => Promise<void>;
 }
 
 export function useNodeOperations({
@@ -31,8 +40,9 @@ export function useNodeOperations({
   setNodeIdCounter,
   onNodeClick,
 }: UseNodeOperationsProps): UseNodeOperationsReturn {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [nodes, setNodes, onNodesChange] =
+    useNodesState<DefaultNodeType>(initialNodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
 
   // Update nodes when initialNodes change
   useEffect(() => {
@@ -45,11 +55,14 @@ export function useNodeOperations({
   }, [initialEdges, setEdges]);
 
   // Add new node
-  const addNewNode = useCallback(async () => {
+  const addNewNode = useCallback(async (nodeData: {
+    title: string;
+    description: string;
+    nodeType: "default" | "start" | "result";
+  }) => {
     if (!projectId) return;
 
     const nodeId = nodeIdCounter.toString();
-    const nodeTitle = `Node ${nodeIdCounter}`;
     const position = {
       x: Math.random() * 500 + 100,
       y: Math.random() * 300 + 100,
@@ -60,11 +73,11 @@ export function useNodeOperations({
       const response = await projectApi.createNode({
         project_id: projectId,
         node_id: nodeId,
-        node_type: "default",
+        node_type: nodeData.nodeType,
         position: position,
         data: {
-          title: nodeTitle,
-          description: "New node description",
+          title: nodeData.title,
+          description: nodeData.description,
         },
       });
 
@@ -72,13 +85,13 @@ export function useNodeOperations({
         // Add node to frontend after successful backend creation
         const newNode: DefaultNodeType = {
           id: nodeId,
-          type: "default",
+          type: nodeData.nodeType,
           position: position,
           data: {
-            title: nodeTitle,
-            description: "New node description",
+            title: nodeData.title,
+            description: nodeData.description,
             file: response.node.data.file, // Include file reference from backend
-            viewCode: () => onNodeClick(nodeId, nodeTitle),
+            viewCode: () => onNodeClick(nodeId, nodeData.title),
           },
         };
         setNodes((nds) => [...nds, newNode]);

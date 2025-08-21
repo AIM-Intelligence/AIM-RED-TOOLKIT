@@ -2,14 +2,14 @@ import { useState } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import clsx from "clsx";
 
-export type DefaultNodeType = Node<{
+export type ResultNodeType = Node<{
   title: string;
   description: string;
   file?: string; // File path reference for the node's Python code
   viewCode: () => void;
 }>;
 
-export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
+export default function ResultNode(props: NodeProps<ResultNodeType>) {
   const [hovering, setHovering] = useState(false);
 
   const handleNodeClick = () => {
@@ -29,10 +29,23 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
     e.currentTarget.dispatchEvent(deleteEvent);
   };
 
+  // const handleGetResult = () => {
+  //   const result = ""
+  //   const blob = new Blob([result], { type: "text/plain" });
+  //   const url = URL.createObjectURL(blob);
+  //   const a = document.createElement("a");
+  //   a.href = url;
+  //   a.download = `${projectTitle}_`;
+  //   document.body.appendChild(a);
+  //   a.click();
+  //   document.body.removeChild(a);
+  //   URL.revokeObjectURL(url);
+  // };
+
   return (
     <div
       className={clsx(
-        "bg-black rounded-lg border-2 border-neutral-500 p-4 min-w-[200px] relative",
+        "bg-black rounded-lg border-2 border-gray-500 p-4 min-w-[200px] relative",
         hovering && "border-red-400 shadow-lg"
       )}
       onMouseEnter={() => setHovering(true)}
@@ -49,20 +62,15 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
       )}
 
       <div className="px-8">
-        <h3 className="text-white font-semibold text-sm mb-1">
-          {props.data.title || "Node Title"}
-        </h3>
-        <p className="text-neutral-400 text-xs mb-2">
-          {props.data.description || "Node description"}
-        </p>
+        <h3 className="text-white font-semibold text-sm mb-1">Result</h3>
         <button
-          className="text-xs bg-red-800 text-white px-2 py-1 rounded hover:bg-red-900 transition-colors"
+          className="text-xs bg-red-800 text-white px-2 py-1 rounded hover:bg-red-700 transition-colors"
           onClick={(e) => {
             e.stopPropagation();
             handleNodeClick();
           }}
         >
-          View Code
+          Get Result
         </button>
       </div>
 
@@ -72,16 +80,6 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
         className="w-3 h-3"
         style={{
           left: -6,
-          top: `${30}px`,
-        }}
-      />
-
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="w-3 h-3"
-        style={{
-          right: -6,
           top: `${30}px`,
         }}
       />
