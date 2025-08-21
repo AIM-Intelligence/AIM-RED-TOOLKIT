@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import NodeMaker from "../components/modal/NodeMaker";
+import ProjectMaker from "../components/modal/ProjectMaker";
 import Loading from "../components/loading/Loading";
-import type { ProjectInfo, Projects } from "../types";
+import type { ProjectInfo } from "../types";
+import { projectApi } from "../utils/api";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -12,11 +13,7 @@ export default function Home() {
 
   const getProjects = async () => {
     try {
-      const response = await fetch("/api/project/");
-      if (!response.ok) {
-        throw new Error(`Failed to fetch projects: ${response.statusText}`);
-      }
-      const data: Projects = await response.json();
+      const data = await projectApi.getAllProjects();
       if (data.success && data.projects) {
         setProjects(data.projects);
       }
@@ -83,7 +80,7 @@ export default function Home() {
           </div>
         </div>
       </div>
-      <NodeMaker
+      <ProjectMaker
         isOpen={makingProject}
         onClose={() => {
           setMakingProject(false);

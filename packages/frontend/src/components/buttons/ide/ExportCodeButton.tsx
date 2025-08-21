@@ -23,7 +23,7 @@ export default function ExportCodeButton({
   return (
     <button
       onClick={handleExportCode}
-      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 hover:cursor-pointer transition-colors duration-200 flex items-center gap-2"
+      className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 hover:cursor-pointer transition-colors duration-200 flex items-center gap-2"
       aria-label="Export code"
     >
       <svg

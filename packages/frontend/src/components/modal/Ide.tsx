@@ -4,6 +4,8 @@ import type { editor } from "monaco-editor";
 import RunCodeButton from "../buttons/ide/RunCodeButton";
 import ExportCodeButton from "../buttons/ide/ExportCodeButton";
 import LoadingModal from "./LoadingModal";
+import { codeApi } from "../../utils/api";
+import X from "../buttons/modal/x";
 
 interface IdeModalProps {
   isOpen: boolean;
@@ -39,25 +41,16 @@ const IdeModal: React.FC<IdeModalProps> = ({
 
     setIsLoadingCode(true);
     try {
-      const response = await fetch("/api/code/getcode", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          project_id: projectId,
-          node_id: nodeId,
-          node_title: nodeTitle,
-        }),
+      const data = await codeApi.getNodeCode({
+        project_id: projectId,
+        node_id: nodeId,
+        node_title: nodeTitle,
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.code) {
-          setCode(data.code);
-          if (editorRef.current) {
-            editorRef.current.setValue(data.code);
-          }
+      if (data.success && data.code) {
+        setCode(data.code);
+        if (editorRef.current) {
+          editorRef.current.setValue(data.code);
         }
       }
     } catch (error) {
@@ -75,20 +68,14 @@ const IdeModal: React.FC<IdeModalProps> = ({
     const currentCode = editorRef.current.getValue();
 
     try {
-      const response = await fetch("/api/code/savecode", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          project_id: projectId,
-          node_id: nodeId,
-          node_title: nodeTitle,
-          code: currentCode,
-        }),
+      const data = await codeApi.saveNodeCode({
+        project_id: projectId,
+        node_id: nodeId,
+        node_title: nodeTitle,
+        code: currentCode,
       });
 
-      if (response.ok) {
+      if (data.success) {
         setSaveStatus("success");
         setCode(currentCode);
       } else {
@@ -151,12 +138,12 @@ const IdeModal: React.FC<IdeModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-800">
+        <div className="flex items-center justify-between p-4 border-b border-neutral-800">
           {/* Left side - Action buttons */}
           <div className="flex gap-2">
             <button
               onClick={handleSave}
-              className="px-4 py-2 rounded-lg font-medium transition-all bg-blue-600 text-white hover:bg-blue-700 hover:cursor-pointer "
+              className="px-4 py-2 rounded-lg font-medium transition-all bg-blue-700 text-white hover:bg-blue-800 hover:cursor-pointer "
             >
               Save
             </button>
@@ -173,35 +160,7 @@ const IdeModal: React.FC<IdeModalProps> = ({
             {nodeTitle}
           </h2>
 
-          {/* Right side - Close button */}
-          <button
-            className="bg-transparent border-none text-white cursor-pointer p-2 flex items-center justify-center rounded transition-all duration-200 ease-in-out hover:bg-white/10 active:scale-95"
-            onClick={onClose}
-            aria-label="Close modal"
-          >
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M18 6L6 18"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M6 6L18 18"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
+          <X onClose={onClose} />
         </div>
 
         {/* Editor Container */}

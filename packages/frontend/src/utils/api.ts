@@ -24,7 +24,7 @@ import type {
   ErrorResponse,
 } from "../types";
 
-const API_BASE_URL = process.env.VITE_API_URL;
+const API_BASE_URL = "/api";
 
 // Helper function for API calls
 async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {

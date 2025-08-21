@@ -24,43 +24,9 @@ import IdeModal from "../../components/modal/Ide";
 import { removeStyle } from "./removeStyle";
 import Loading from "../../components/loading/Loading";
 import WrongPath from "../WrongPath/WrongPath";
+import { projectApi } from "../../utils/api";
+import type { ProjectNode, ProjectEdge, ProjectStructure } from "../../types";
 
-// Backend API response types
-interface BackendNodeData {
-  title: string;
-  description?: string;
-  file?: string;
-}
-
-interface BackendNode {
-  id: string;
-  type?: string;
-  position: { x: number; y: number };
-  data: BackendNodeData;
-}
-
-interface BackendEdge {
-  id: string;
-  type?: string;
-  source: string;
-  target: string;
-  sourceHandle?: string | null;
-  targetHandle?: string | null;
-  markerEnd?: { type: MarkerType | string };
-}
-
-interface BackendProject {
-  project_name: string;
-  project_description?: string;
-  project_id: string;
-  nodes: BackendNode[];
-  edges: BackendEdge[];
-}
-
-interface ProjectApiResponse {
-  success: boolean;
-  project: BackendProject;
-}
 
 export default function Project() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -111,28 +77,17 @@ export default function Project() {
           return;
         }
 
-        const response = await fetch(`/api/project/${projectId}`);
-
-        if (!response.ok) {
-          if (response.status === 404) {
-            setIsInvalidProject(true);
-            setIsLoading(false);
-            return;
-          }
-          throw new Error(`Failed to fetch project: ${response.statusText}`);
-        }
-
-        const data: ProjectApiResponse = await response.json();
+        const data = await projectApi.getProject(projectId);
 
         if (data.success && data.project) {
-          const project: BackendProject = data.project;
+          const project: ProjectStructure = data.project;
 
           // Set project title
           setProjectTitle(project.project_name || "");
 
           // Transform backend nodes to ReactFlow format
           const transformedNodes: DefaultNodeType[] = project.nodes.map(
-            (node: BackendNode) => ({
+            (node: ProjectNode) => ({
               id: node.id,
               type: node.type || "default",
               position: node.position,
@@ -152,7 +107,7 @@ export default function Project() {
 
           // Transform backend edges to ReactFlow format
           const transformedEdges: Edge[] = project.edges.map(
-            (edge: BackendEdge) => ({
+            (edge: ProjectEdge) => ({
               id: edge.id,
               type: edge.type || "custom",
               source: edge.source,
@@ -176,15 +131,17 @@ export default function Project() {
           // Update node counter based on existing nodes
           if (project.nodes.length > 0) {
             const maxId = Math.max(
-              ...project.nodes.map((n: BackendNode) => parseInt(n.id, 10) || 0)
+              ...project.nodes.map((n: ProjectNode) => parseInt(n.id, 10) || 0)
             );
             setNodeIdCounter(maxId + 1);
           }
         }
       } catch (err) {
         console.error("Error fetching project:", err);
-        // Check if it's a network or malformed URI error
+        // Check if it's a network or malformed URI error or 404
         if (err instanceof TypeError && err.message.includes("URI")) {
+          setIsInvalidProject(true);
+        } else if (err instanceof Error && err.message.includes("404")) {
           setIsInvalidProject(true);
         } else {
           setError(

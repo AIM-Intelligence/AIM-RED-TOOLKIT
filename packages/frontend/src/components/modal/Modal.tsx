@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import X from "../buttons/modal/x";
 
 interface ModalProps {
   isOpen: boolean;
@@ -47,34 +48,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, children }) => {
         className="relative bg-[#0a0a0a] rounded-xl max-w-[75vw] max-h-[75vh] overflow-auto shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp min-w-[400px] min-h-[200px] sm:min-w-[90vw] sm:mx-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          className="absolute top-4 right-4 bg-transparent border-none text-white cursor-pointer p-2 flex items-center justify-center rounded transition-all duration-200 ease-in-out z-[1] hover:bg-white/10 active:scale-95"
-          onClick={onClose}
-          aria-label="Close modal"
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M18 6L6 18"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M6 6L18 18"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
+        <X onClose={onClose} />
         <div className="p-8 text-white sm:p-6">{children}</div>
       </div>
     </div>
