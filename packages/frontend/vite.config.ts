@@ -8,6 +8,11 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    watch: {
+      // Use polling for file changes detection in Docker
+      usePolling: true,
+      interval: 1000,
+    },
     proxy: {
       "/api": {
         target: process.env.VITE_API_URL || "http://localhost:8000",

@@ -1,0 +1,55 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: ./packages/backend/Dockerfile
+    container_name: aim-red-backend-dev
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source code for hot-reload
+      - ./packages/backend/app:/app/app
+      # Mount projects directory for persistent storage
+      - ./packages/backend/projects:/app/projects
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DEVELOPMENT=true
+    networks:
+      - aim-red-network-dev
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: .
+      dockerfile: ./packages/frontend/Dockerfile
+    container_name: aim-red-frontend-dev
+    ports:
+      - "5173:5173"
+    volumes:
+      # Mount entire frontend directory for hot reload
+      - ./packages/frontend:/app/packages/frontend
+      # Mount root config files
+      - ./package.json:/app/package.json
+      - ./pnpm-workspace.yaml:/app/pnpm-workspace.yaml
+      # Preserve node_modules in container
+      - /app/packages/frontend/node_modules
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://backend:8000
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    depends_on:
+      - backend
+    networks:
+      - aim-red-network-dev
+    stdin_open: true
+    tty: true
+
+networks:
+  aim-red-network-dev:
+    driver: bridge

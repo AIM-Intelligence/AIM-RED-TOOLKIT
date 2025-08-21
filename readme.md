@@ -10,19 +10,22 @@ A web-based Python IDE with React frontend and FastAPI backend, fully containeri
 
 ## Quick Start with Docker
 
-### Development Mode
+### Development Mode (with Hot Reload)
 
 ```bash
 # Clone the repository
 git clone https://github.com/AIM-Intelligence/AIM-RED-TOOLKIT.git
 cd aim-red-toolkit
 
-# Start services in development environment with Docker Compose
+# Start services with hot reload enabled
+docker-compose -f docker-compose.dev.yml up --build
+
+# Or use the standard docker-compose (also supports hot reload)
 docker-compose up --build
 
 # Access the application
-# Frontend: http://localhost:5173
-# Backend API: http://localhost:8000
+# Frontend: http://localhost:5173 (with hot reload)
+# Backend API: http://localhost:8000 (with auto-reload)
 ```
 
 ### Production Mode
