@@ -13,6 +13,19 @@ export default function NodeMaker({ isOpen, onClose }: NodeMakerProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Fallback UUID generator for browsers that don't support crypto.randomUUID
+  const generateUUID = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    // Fallback UUID v4 generator
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -25,7 +38,7 @@ export default function NodeMaker({ isOpen, onClose }: NodeMakerProps) {
     setIsLoading(true);
     setError(null);
 
-    const projectId = crypto.randomUUID();
+    const projectId = generateUUID();
 
     try {
       const response = await fetch("/api/project/make", {

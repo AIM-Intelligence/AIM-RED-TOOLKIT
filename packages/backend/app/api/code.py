@@ -1,8 +1,11 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from typing import Optional
+from pathlib import Path
 from ..core.execute_code import execute_python_code
 from ..core import node_operations
+from ..core.pipeline_executor import execute_pipeline
 
 router = APIRouter()
 
@@ -77,5 +80,32 @@ async def save_node_code(request: SaveNodeCodeRequest):
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class PipelineExecutionRequest(BaseModel):
+    project_id: str
+
+@router.post("/execute-pipeline")
+async def execute_pipeline_endpoint(request: PipelineExecutionRequest):
+    """Execute all nodes in a pipeline following edge connections"""
+    try:
+        result = execute_pipeline(request.project_id)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/gettemplate/{template_name}", response_class=PlainTextResponse)
+async def get_template(template_name: str):
+    """Get a template code file"""
+    try:
+        template_path = Path(__file__).parent.parent / "templates" / f"{template_name}.py"
+        if not template_path.exists():
+            raise HTTPException(status_code=404, detail=f"Template {template_name} not found")
+        
+        with open(template_path, "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Template {template_name} not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

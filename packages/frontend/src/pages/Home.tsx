@@ -40,6 +40,36 @@ export default function Home() {
     setMakingProject(true);
   };
 
+  const handleDeleteProject = async (e: React.MouseEvent, project: ProjectInfo) => {
+    e.stopPropagation(); // Prevent navigation to project
+    
+    if (!confirm(`Are you sure you want to delete "${project.project_name}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/project/delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project_name: project.project_name,
+          project_id: project.project_id,
+        }),
+      });
+
+      if (response.ok) {
+        // Refresh the projects list
+        await getProjects();
+      } else {
+        console.error("Failed to delete project");
+        alert("Failed to delete project. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      alert("Error deleting project. Please try again.");
+    }
+  };
+
   if (isLoading) {
     return <Loading />;
   }
@@ -61,8 +91,15 @@ export default function Home() {
             <div
               key={project.project_id}
               onClick={() => handleProjectClick(project)}
-              className="bg-black border-2 border-gray-500 rounded-lg p-6 cursor-pointer hover:bg-gray-750 hover:border-red-700 transition-all duration-200"
+              className="bg-black border-2 border-gray-500 rounded-lg p-6 cursor-pointer hover:bg-gray-750 hover:border-red-700 transition-all duration-200 relative group"
             >
+              <button
+                onClick={(e) => handleDeleteProject(e, project)}
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-8 h-8 flex items-center justify-center"
+                title="Delete project"
+              >
+                ×
+              </button>
               <h2 className="text-xl font-semibold mb-2">
                 {project.project_name}
               </h2>

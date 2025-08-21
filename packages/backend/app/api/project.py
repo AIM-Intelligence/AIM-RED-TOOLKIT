@@ -165,6 +165,25 @@ async def make_node(request: CreateNodeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class SaveProjectRequest(BaseModel):
+    nodes: List[Dict[str, Any]]
+    edges: List[Dict[str, Any]]
+
+@router.post("/save/{project_id}")
+async def save_project_structure(project_id: str, request: SaveProjectRequest):
+    """Save project structure (nodes and edges) to backend"""
+    try:
+        # Update the project structure
+        result = project_structure.update_project_structure(
+            project_id,
+            request.nodes,
+            request.edges
+        )
+        return {"success": True, "message": "Project structure saved"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/deletenode")
 async def delete_node(request: DeleteNodeRequest):
     """Delete a node and its python file"""
