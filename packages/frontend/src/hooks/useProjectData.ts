@@ -2,7 +2,12 @@ import { useState, useEffect } from "react";
 import { projectApi } from "../utils/api";
 import type { ProjectStructure, ProjectNode, ProjectEdge } from "../types";
 import type { DefaultNodeType } from "../components/nodes/DefaultNode";
+import type { StartNodeType } from "../components/nodes/StartNode";
+import type { ResultNodeType } from "../components/nodes/ResultNode";
 import type { Edge, MarkerType } from "@xyflow/react";
+
+// Union type for all node types
+type AnyNodeType = DefaultNodeType | StartNodeType | ResultNodeType;
 
 interface UseProjectDataReturn {
   projectData: ProjectStructure | null;
@@ -10,7 +15,7 @@ interface UseProjectDataReturn {
   isLoading: boolean;
   error: string | null;
   isInvalidProject: boolean;
-  transformedNodes: DefaultNodeType[];
+  transformedNodes: AnyNodeType[];
   transformedEdges: Edge[];
   maxNodeId: number;
 }
@@ -24,9 +29,9 @@ export function useProjectData(
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isInvalidProject, setIsInvalidProject] = useState(false);
-  const [transformedNodes, setTransformedNodes] = useState<DefaultNodeType[]>([]);
+  const [transformedNodes, setTransformedNodes] = useState<AnyNodeType[]>([]);
   const [transformedEdges, setTransformedEdges] = useState<Edge[]>([]);
-  const [maxNodeId, setMaxNodeId] = useState(4);
+  const [maxNodeId, setMaxNodeId] = useState(1);
 
   useEffect(() => {
     const fetchProjectData = async () => {
@@ -53,20 +58,46 @@ export function useProjectData(
           setProjectTitle(project.project_name || "");
 
           // Transform backend nodes to ReactFlow format
-          const nodes: DefaultNodeType[] = project.nodes.map(
-            (node: ProjectNode) => ({
-              id: node.id,
-              type: node.type || "default",
-              position: node.position,
-              data: {
+          const nodes: AnyNodeType[] = project.nodes.map(
+            (node: ProjectNode): AnyNodeType => {
+              const nodeType = node.type || "custom";
+              const baseData = {
                 title: node.data.title || `Node ${node.id}`,
                 description: node.data.description || "",
-                file: node.data.file, // Include file reference from backend
-                viewCode: () => {
-                  onNodeClick(node.id, node.data.title || `Node ${node.id}`);
-                },
-              },
-            })
+              };
+
+              if (nodeType === 'start') {
+                return {
+                  id: node.id,
+                  type: 'start',
+                  position: node.position,
+                  data: {
+                    ...baseData,
+                    file: node.data.file,
+                  },
+                } as StartNodeType;
+              } else if (nodeType === 'result') {
+                return {
+                  id: node.id,
+                  type: 'result',
+                  position: node.position,
+                  data: baseData,
+                } as ResultNodeType;
+              } else {
+                return {
+                  id: node.id,
+                  type: 'custom',
+                  position: node.position,
+                  data: {
+                    ...baseData,
+                    file: node.data.file,
+                    viewCode: () => {
+                      onNodeClick(node.id, node.data.title || `Node ${node.id}`);
+                    },
+                  },
+                } as DefaultNodeType;
+              }
+            }
           );
 
           // Transform backend edges to ReactFlow format

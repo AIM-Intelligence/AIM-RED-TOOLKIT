@@ -1,17 +1,22 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import Editor from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
-import RunCodeButton from "../buttons/ide/RunCodeButton";
-import ExportCodeButton from "../buttons/ide/ExportCodeButton";
+import type * as Monaco from "monaco-editor";
+import SimpleExportButton from "../buttons/ide/SimpleExportButton";
 import LoadingModal from "./LoadingModal";
 import { codeApi } from "../../utils/api";
 import X from "../buttons/modal/x";
+import { pythonLspClient, type LSPConnection } from "../../lsp/pythonLspClient";
+import {
+  initializeMonacoServices,
+  createModel,
+  disposeModel,
+} from "../../lsp/monacoSetup";
 
 interface IdeModalProps {
   isOpen: boolean;
   onClose: () => void;
   projectId: string;
-  projectTitle: string;
   nodeId: string;
   nodeTitle: string;
   initialCode?: string;
@@ -21,7 +26,6 @@ const IdeModal: React.FC<IdeModalProps> = ({
   isOpen,
   onClose,
   projectId,
-  projectTitle,
   nodeId,
   nodeTitle,
   initialCode = "# Write your Python function here\ndef foo():\n  return 'Hello, World!'",
@@ -33,7 +37,102 @@ const IdeModal: React.FC<IdeModalProps> = ({
   );
   const [code, setCode] = useState(initialCode);
   const [isLoadingCode, setIsLoadingCode] = useState(false);
-  console.log(projectTitle);
+  const [runModalOpen, setRunModalOpen] = useState(false);
+  const [runStatus, setRunStatus] = useState<"loading" | "success" | "error">(
+    "loading"
+  );
+  const [runResult, setRunResult] = useState<string>("");
+  const [installedPackages, setInstalledPackages] = useState<
+    Array<{ name: string; version: string }>
+  >([]);
+  const [showPackageManager, setShowPackageManager] = useState(false);
+  const [packageInput, setPackageInput] = useState("");
+  const [isInstallingPackage, setIsInstallingPackage] = useState(false);
+  const [lspConnection, setLspConnection] = useState<LSPConnection | null>(
+    null
+  );
+  const [isLspConnecting, setIsLspConnecting] = useState(false);
+  const modelRef = useRef<Monaco.editor.ITextModel | null>(null);
+
+  // Fetch installed packages
+  const fetchPackages = useCallback(async () => {
+    if (!projectId) return;
+
+    try {
+      const data = await codeApi.getPackages({ project_id: projectId });
+      if (data.success) {
+        setInstalledPackages(data.packages);
+      }
+    } catch (error) {
+      console.error("Error fetching packages:", error);
+    }
+  }, [projectId]);
+
+  // Install package
+  const handleInstallPackage = async () => {
+    if (!packageInput.trim() || !projectId) return;
+
+    setIsInstallingPackage(true);
+    try {
+      const result = await codeApi.installPackage({
+        project_id: projectId,
+        package: packageInput.trim(),
+      });
+
+      if (result.success) {
+        await fetchPackages();
+        setPackageInput("");
+        alert(`Successfully installed ${packageInput}`);
+        // Restart LSP to pick up new packages
+        if (lspConnection) {
+          await lspConnection.restart();
+        }
+      } else {
+        alert(`Failed to install ${packageInput}: ${result.message}`);
+      }
+    } catch (error) {
+      console.error("Error installing package:", error);
+      alert(
+        `Error installing package: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    } finally {
+      setIsInstallingPackage(false);
+    }
+  };
+
+  // Uninstall package
+  const handleUninstallPackage = async (packageName: string) => {
+    if (!projectId) return;
+
+    if (!confirm(`Are you sure you want to uninstall ${packageName}?`)) return;
+
+    try {
+      const result = await codeApi.uninstallPackage({
+        project_id: projectId,
+        package: packageName,
+      });
+
+      if (result.success) {
+        await fetchPackages();
+        alert(`Successfully uninstalled ${packageName}`);
+        // Restart LSP to reflect removed packages
+        if (lspConnection) {
+          await lspConnection.restart();
+        }
+      } else {
+        alert(`Failed to uninstall ${packageName}: ${result.message}`);
+      }
+    } catch (error) {
+      console.error("Error uninstalling package:", error);
+      alert(
+        `Error uninstalling package: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  };
 
   // Fetch code from backend when modal opens
   const fetchCode = useCallback(async () => {
@@ -60,7 +159,7 @@ const IdeModal: React.FC<IdeModalProps> = ({
     }
   }, [projectId, nodeId, nodeTitle]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!editorRef.current) return;
 
     setSaveModalOpen(true);
@@ -78,21 +177,91 @@ const IdeModal: React.FC<IdeModalProps> = ({
       if (data.success) {
         setSaveStatus("success");
         setCode(currentCode);
+        setTimeout(() => setSaveModalOpen(false), 1500);
       } else {
         setSaveStatus("error");
       }
     } catch (error) {
-      console.error("Error saving code:", error);
       setSaveStatus("error");
+      console.error("Error saving code:", error);
     }
-  };
+  }, [projectId, nodeId, nodeTitle]);
 
-  // Fetch code when modal opens
+  const handleRunCode = useCallback(async () => {
+    if (!editorRef.current) return;
+
+    setRunModalOpen(true);
+    setRunStatus("loading");
+    setRunResult("");
+
+    const currentCode = editorRef.current.getValue();
+
+    try {
+      // First save the code
+      await codeApi.saveNodeCode({
+        project_id: projectId,
+        node_id: nodeId,
+        node_title: nodeTitle,
+        code: currentCode,
+      });
+
+      // Then execute it
+      const result = await codeApi.executeNode({
+        project_id: projectId,
+        node_id: nodeId,
+      });
+
+      if (result.success) {
+        setRunStatus("success");
+        setRunResult(JSON.stringify(result.output, null, 2));
+      } else {
+        setRunStatus("error");
+        setRunResult(result.error || "Execution failed");
+      }
+    } catch (error) {
+      setRunStatus("error");
+      setRunResult(error instanceof Error ? error.message : "Unknown error");
+    }
+  }, [projectId, nodeId, nodeTitle]);
+
+  // Initialize Monaco services on first mount
+  useEffect(() => {
+    initializeMonacoServices().catch(console.error);
+  }, []);
+
+  // Connect to LSP when modal opens
+  useEffect(() => {
+    if (isOpen && projectId && !lspConnection && !isLspConnecting) {
+      setIsLspConnecting(true);
+      pythonLspClient
+        .connect(projectId)
+        .then((connection) => {
+          setLspConnection(connection);
+          console.log("LSP connected successfully");
+        })
+        .catch((error) => {
+          console.error("Failed to connect to LSP:", error);
+        })
+        .finally(() => {
+          setIsLspConnecting(false);
+        });
+    }
+
+    return () => {
+      if (lspConnection && !isOpen) {
+        lspConnection.dispose();
+        setLspConnection(null);
+      }
+    };
+  }, [isOpen, projectId, lspConnection, isLspConnecting]);
+
+  // Fetch code and packages when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchCode();
+      fetchPackages();
     }
-  }, [isOpen, nodeId, fetchCode]);
+  }, [isOpen, nodeId, fetchCode, fetchPackages]);
 
   useEffect(() => {
     if (isOpen) {
@@ -122,9 +291,104 @@ const IdeModal: React.FC<IdeModalProps> = ({
     };
   }, [isOpen, onClose]);
 
-  const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor) => {
-    editorRef.current = editor;
-  };
+  // Ctrl+S / Cmd+S save shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+S (Windows/Linux) or Cmd+S (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault(); // Prevent browser's default save dialog
+        handleSave();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener("keydown", handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, handleSave]);
+
+  const handleEditorDidMount = useCallback(
+    (editor: editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
+      editorRef.current = editor;
+
+      // Create a model for the file with proper URI
+      const fileUri = `file:///${projectId}/${nodeId}_${nodeTitle.replace(
+        /\s+/g,
+        "_"
+      )}.py`;
+      const model = createModel(code, "python", fileUri);
+      modelRef.current = model;
+      editor.setModel(model);
+
+      // LSP will handle all language features
+
+      // Configure editor options
+      editor.updateOptions({
+        automaticLayout: true,
+        minimap: { enabled: true },
+        scrollBeyondLastLine: false,
+        fontSize: 14,
+        lineNumbers: "on",
+        roundedSelection: false,
+        cursorStyle: "line",
+        glyphMargin: true,
+        quickSuggestions: {
+          other: true,
+          comments: false,
+          strings: false,
+        },
+        wordBasedSuggestions: "currentDocument",
+        suggestOnTriggerCharacters: true,
+        parameterHints: {
+          enabled: true,
+        },
+        suggest: {
+          snippetsPreventQuickSuggestions: false,
+          showMethods: true,
+          showFunctions: true,
+          showVariables: true,
+          showClasses: true,
+          showModules: true,
+          showKeywords: true,
+          showSnippets: true,
+          insertMode: "replace",
+        },
+        tabSize: 4,
+        insertSpaces: true,
+        formatOnType: true,
+        formatOnPaste: true,
+        autoIndent: "full",
+        folding: true,
+        foldingStrategy: "indentation",
+      });
+
+      // Add Python-specific keybindings
+      editor.addAction({
+        id: "python-run-code",
+        label: "Run Python Code",
+        keybindings: [monaco.KeyCode.F5],
+        contextMenuGroupId: "navigation",
+        contextMenuOrder: 1.5,
+        run: () => {
+          handleRunCode();
+        },
+      });
+    },
+    [code, projectId, nodeId, nodeTitle, handleRunCode]
+  );
+
+  // Cleanup model on unmount
+  useEffect(() => {
+    return () => {
+      if (modelRef.current) {
+        disposeModel(modelRef.current);
+        modelRef.current = null;
+      }
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -134,89 +398,187 @@ const IdeModal: React.FC<IdeModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="relative bg-[#0a0a0a] rounded-xl w-[70vw] h-[70vh] overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp flex flex-col"
+        className="bg-neutral-950 rounded-lg shadow-2xl w-11/12 max-w-6xl h-5/6 flex flex-col animate-scaleIn relative"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-neutral-800">
-          {/* Left side - Action buttons */}
-          <div className="flex gap-2">
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 rounded-lg font-medium transition-all bg-blue-700 text-white hover:bg-blue-800 hover:cursor-pointer "
-            >
-              Save
-            </button>
-            <RunCodeButton />
-            <ExportCodeButton
-              nodeId={nodeId}
-              nodeTitle={nodeTitle}
-              editorRef={editorRef}
-            />
-          </div>
-
-          {/* Center - Title */}
-          <h2 className="text-white text-lg font-semibold absolute left-1/2 transform -translate-x-1/2">
-            {nodeTitle}
+        <div className="flex justify-between items-center p-4 border-b border-gray-700">
+          <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+            Python IDE - {nodeTitle}
+            {isLoadingCode && (
+              <span className="text-sm text-gray-400">(Loading...)</span>
+            )}
           </h2>
-
           <X onClose={onClose} />
         </div>
 
-        {/* Editor Container */}
-        <div className="flex-1 overflow-hidden">
-          {isLoadingCode ? (
-            <div className="flex flex-col items-center justify-center h-full">
-              <img
-                src={"/aim-red.png"}
-                alt="Loading"
-                className="w-9 h-9 animate-spin-reverse mb-3"
-              />
-              <div className="text-white">Loading code...</div>
-            </div>
-          ) : (
-            <Editor
-              height="100%"
-              defaultLanguage="python"
-              value={code}
-              theme="vs-dark"
-              onMount={handleEditorDidMount}
-              onChange={(value) => setCode(value || "")}
-              options={{
-                minimap: { enabled: true },
-                fontSize: 14,
-                lineNumbers: "on",
-                roundedSelection: false,
-                scrollBeyondLastLine: false,
-                readOnly: false,
-                automaticLayout: true,
-                wordWrap: "on",
-                scrollbar: {
-                  vertical: "visible",
-                  horizontal: "visible",
-                  verticalScrollbarSize: 10,
-                  horizontalScrollbarSize: 10,
-                },
-                padding: {
-                  top: 10,
-                  bottom: 10,
-                },
-              }}
+        <div className="flex-1 p-4 bg-neutral-900">
+          <Editor
+            height="100%"
+            defaultLanguage="python"
+            defaultValue={code}
+            theme="vs-dark"
+            onMount={handleEditorDidMount}
+            options={{
+              automaticLayout: true,
+              minimap: { enabled: true },
+              fontSize: 14,
+            }}
+          />
+        </div>
+
+        <div className="p-4 border-t border-gray-700 flex justify-between">
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors flex items-center gap-2"
+            >
+              Save
+            </button>
+            <button
+              onClick={handleRunCode}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <span>▶️</span>
+              Run
+            </button>
+            <SimpleExportButton
+              code={editorRef.current?.getValue() || code}
+              fileName={`${nodeId}_${nodeTitle.replace(/\s+/g, "_")}.py`}
             />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowPackageManager(!showPackageManager)}
+              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors flex items-center gap-2"
+            >
+              Packages
+            </button>
+          </div>
+        </div>
+
+        {/* Package Manager Slide-out Panel */}
+        <div
+          className={`absolute top-0 right-0 h-full w-80 bg-neutral-900 border-l border-gray-700 transform transition-transform ${
+            showPackageManager ? "translate-x-0" : "translate-x-full"
+          } z-10`}
+        >
+          <div className="p-4 border-b border-gray-700 flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-white">
+              Package Manager
+            </h3>
+            <button
+              onClick={() => setShowPackageManager(false)}
+              className="text-gray-400 hover:text-white"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="p-4">
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Install Package
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={packageInput}
+                  onChange={(e) => setPackageInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleInstallPackage()}
+                  placeholder="e.g., numpy, pandas==2.0.0"
+                  className="flex-1 px-3 py-2 bg-neutral-800 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                  disabled={isInstallingPackage}
+                />
+                <button
+                  onClick={handleInstallPackage}
+                  disabled={isInstallingPackage || !packageInput.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isInstallingPackage ? "Installing..." : "Install"}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="text-sm font-medium text-gray-300 mb-2">
+                Installed Packages ({installedPackages.length})
+              </h4>
+              <div className="max-h-96 overflow-y-auto">
+                {installedPackages.length === 0 ? (
+                  <p className="text-gray-500 text-sm">No packages installed</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {installedPackages.map((pkg) => (
+                      <li
+                        key={pkg.name}
+                        className="flex justify-between items-center px-3 py-2 bg-neutral-800 rounded hover:bg-neutral-700 group"
+                      >
+                        <span className="text-white text-sm">
+                          {pkg.name}{" "}
+                          <span className="text-gray-500">v{pkg.version}</span>
+                        </span>
+                        <button
+                          onClick={() => handleUninstallPackage(pkg.name)}
+                          className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity text-sm"
+                        >
+                          Uninstall
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* LSP Status Indicator */}
+        <div className="absolute bottom-4 right-4 flex items-center gap-2 text-xs text-gray-400">
+          {isLspConnecting && (
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
+              Connecting to language server...
+            </span>
+          )}
+          {lspConnection && !isLspConnecting && (
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
+              Language server connected
+            </span>
+          )}
+          {!lspConnection && !isLspConnecting && (
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 bg-gray-500 rounded-full"></span>
+              Language server offline
+            </span>
           )}
         </div>
-      </div>
 
-      <LoadingModal
-        isOpen={saveModalOpen}
-        status={saveStatus}
-        onClose={() => setSaveModalOpen(false)}
-        notice={{
-          loading: "Saving...",
-          success: "Saved Successfully",
-          error: "Fail to Save",
-        }}
-      />
+        {/* Save Modal */}
+        <LoadingModal
+          isOpen={saveModalOpen}
+          status={saveStatus}
+          notice={{
+            loading: "Saving code...",
+            success: "Code saved successfully!",
+            error: "Failed to save code",
+          }}
+          onClose={() => setSaveModalOpen(false)}
+        />
+
+        {/* Run Modal */}
+        <LoadingModal
+          isOpen={runModalOpen}
+          status={runStatus}
+          notice={{
+            loading: "Executing code...",
+            success: "Execution completed!",
+            error: "Execution failed",
+            errorDetails: runStatus === "error" ? runResult : undefined,
+          }}
+          onClose={() => setRunModalOpen(false)}
+        />
+      </div>
     </div>
   );
 };

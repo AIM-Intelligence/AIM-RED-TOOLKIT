@@ -1,12 +1,14 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any, Literal
 from ..core import (
     project_operations,
     project_structure,
     node_operations,
     edge_operations
 )
+from ..core.flow_executor import FlowExecutor
+from ..core.flow_analyzer import FlowAnalyzer
 
 router = APIRouter()
 
@@ -23,13 +25,18 @@ class DeleteProjectRequest(BaseModel):
 class CreateNodeRequest(BaseModel):
     project_id: str
     node_id: str
-    node_type: str = "default"
+    node_type: str = "custom"
     position: Dict[str, float]
     data: Dict[str, Any]
 
 class DeleteNodeRequest(BaseModel):
     project_id: str
     node_id: str
+
+class UpdateNodePositionRequest(BaseModel):
+    project_id: str
+    node_id: str
+    position: Dict[str, float]
 
 class CreateEdgeRequest(BaseModel):
     project_id: str
@@ -42,6 +49,17 @@ class CreateEdgeRequest(BaseModel):
 class DeleteEdgeRequest(BaseModel):
     project_id: str
     edge_id: str
+
+class ExecuteFlowRequest(BaseModel):
+    project_id: str
+    start_node_id: Optional[str] = None
+    params: Dict[str, Any] = Field(default_factory=dict)
+    max_workers: int = Field(default=4, ge=1, le=10)
+    timeout_sec: int = Field(default=30, ge=1, le=300)
+    halt_on_error: bool = True
+
+class AnalyzeFlowRequest(BaseModel):
+    project_id: str
 
 
 
@@ -177,6 +195,22 @@ async def delete_node(request: DeleteNodeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.put("/updatenode/position")
+async def update_node_position(request: UpdateNodePositionRequest):
+    """Update node position in project structure"""
+    try:
+        result = node_operations.update_node_position(
+            request.project_id,
+            request.node_id,
+            request.position
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/makeedge")
 async def make_edge(request: CreateEdgeRequest):
     """Create a new edge between nodes"""
@@ -206,3 +240,64 @@ async def delete_edge(request: DeleteEdgeRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/execute-flow")
+async def execute_flow(request: ExecuteFlowRequest):
+    """Execute the node flow starting from start node"""
+    try:
+        # Initialize flow executor
+        import os
+        projects_root = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "projects"
+        )
+        executor = FlowExecutor(projects_root)
+        
+        # Execute the flow
+        result = await executor.execute_flow(
+            project_id=request.project_id,
+            start_node_id=request.start_node_id,
+            params=request.params,
+            max_workers=request.max_workers,
+            timeout_sec=request.timeout_sec,
+            halt_on_error=request.halt_on_error
+        )
+        
+        return result
+        
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Flow execution failed: {str(e)}")
+
+
+@router.post("/analyze-flow")
+async def analyze_flow(request: AnalyzeFlowRequest):
+    """Analyze the flow structure for validation and optimization"""
+    try:
+        # Get project structure
+        structure = project_structure.get_project_structure(request.project_id)
+        nodes = structure.get('nodes', [])
+        edges = structure.get('edges', [])
+        
+        # Perform analysis
+        analysis = FlowAnalyzer.analyze_flow_structure(nodes, edges)
+        
+        # Validate flow
+        is_valid, errors = FlowAnalyzer.validate_flow(nodes, edges)
+        analysis['is_valid'] = is_valid
+        analysis['validation_errors'] = errors
+        
+        return {
+            "success": True,
+            "project_id": request.project_id,
+            "analysis": analysis
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Flow analysis failed: {str(e)}")

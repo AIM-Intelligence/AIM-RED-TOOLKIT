@@ -7,11 +7,9 @@ import WrongPath from "../WrongPath/WrongPath";
 import ProjectPanel from "./layouts/ProjectPanel";
 import ProjectError from "./errors/ProjectError";
 import ProjectFlow from "./flow/ProjectFlow";
-import { removeStyle } from "./removeStyle";
 import { useProjectData } from "../../hooks/useProjectData";
 import { useNodeOperations } from "../../hooks/useNodeOperations";
 import { useEdgeOperations } from "../../hooks/useEdgeOperations";
-import { useProjectStyles } from "../../hooks/useProjectStyles";
 
 export default function Project() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -26,10 +24,7 @@ export default function Project() {
     nodeId: "1",
     title: "Python IDE",
   });
-  const [nodeIdCounter, setNodeIdCounter] = useState(4);
-
-  // Apply project styles
-  useProjectStyles(removeStyle);
+  const [nodeIdCounter, setNodeIdCounter] = useState(1);
 
   // Handle node click
   const handleNodeClick = useCallback((nodeId: string, title: string) => {
@@ -72,22 +67,26 @@ export default function Project() {
     projectId,
     edges,
     setEdges,
+    nodes,
   });
 
   // Check if there's already a start node
   const hasStartNode = useMemo(() => {
-    return nodes.some(node => node.type === "start");
+    return nodes.some((node) => node.type === "start");
   }, [nodes]);
 
   // Handle SetupModal confirm
-  const handleSetupConfirm = useCallback(async (nodeData: {
-    title: string;
-    description: string;
-    nodeType: "default" | "start" | "result";
-  }) => {
-    await addNewNode(nodeData);
-    setIsSetupModalOpen(false);
-  }, [addNewNode]);
+  const handleSetupConfirm = useCallback(
+    async (nodeData: {
+      title: string;
+      description: string;
+      nodeType: "custom" | "start" | "result";
+    }) => {
+      await addNewNode(nodeData);
+      setIsSetupModalOpen(false);
+    },
+    [addNewNode]
+  );
 
   // Handle retry
   const handleRetry = useCallback(() => {
@@ -130,7 +129,6 @@ export default function Project() {
         isOpen={isIdeModalOpen}
         onClose={() => setIsIdeModalOpen(false)}
         projectId={projectId}
-        projectTitle={projectTitle}
         nodeId={selectedNodeData.nodeId}
         nodeTitle={selectedNodeData.title}
       />

@@ -11,7 +11,7 @@ export function transformNodeToReactFlow(
 ): DefaultNodeType {
   return {
     id: node.id,
-    type: node.type || "default",
+    type: node.type || "custom",
     position: node.position,
     data: {
       title: node.data.title || `Node ${node.id}`,

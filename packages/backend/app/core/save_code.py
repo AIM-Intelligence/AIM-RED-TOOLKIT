@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 def save_project_code(project_hash: str, project_title: str, node_id: str, node_title: str, code: str) -> dict:
@@ -14,7 +15,8 @@ def save_project_code(project_hash: str, project_title: str, node_id: str, node_
     Returns:
         Dictionary with success status and file path
     """
-    projects_dir = Path("projects")
+    # Get absolute path to projects directory
+    projects_dir = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "projects"
     projects_dir.mkdir(exist_ok=True)
     
     project_dir = projects_dir / project_hash

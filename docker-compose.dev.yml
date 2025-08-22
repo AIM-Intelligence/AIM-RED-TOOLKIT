@@ -11,17 +11,26 @@ services:
       - ./packages/backend/app:/app/app
       # Mount projects directory for persistent storage
       - ./packages/backend/projects:/app/projects
+      # Mount LSP logs directory
+      - lsp-logs-dev:/var/log/aim-red/lsp
     environment:
       - PYTHONUNBUFFERED=1
       - DEVELOPMENT=true
+      # LSP Configuration
+      - LSP_LOG_LEVEL=DEBUG
+      - LSP_STDIO_LOG_DIR=/var/log/aim-red/lsp
+      - LSP_IDLE_TTL_MS=600000
+      - LSP_MAX_RESTARTS=5
+      - LSP_RESTART_WINDOW_MS=60000
     networks:
       - aim-red-network-dev
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   frontend:
     build:
@@ -53,3 +62,7 @@ services:
 networks:
   aim-red-network-dev:
     driver: bridge
+
+volumes:
+  lsp-logs-dev:
+    driver: local

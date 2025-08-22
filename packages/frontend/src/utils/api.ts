@@ -21,6 +21,10 @@ import type {
   GetNodeCodeResponse,
   SaveNodeCodeRequest,
   SaveNodeCodeResponse,
+  ExecuteFlowRequest,
+  ExecuteFlowResponse,
+  AnalyzeFlowRequest,
+  AnalyzeFlowResponse,
   ErrorResponse,
 } from "../types";
 
@@ -93,6 +97,23 @@ export const projectApi = {
     });
   },
 
+  // Update node position
+  async updateNodePosition(data: {
+    project_id: string;
+    node_id: string;
+    position: { x: number; y: number };
+  }): Promise<{
+    success: boolean;
+    message: string;
+    node_id: string;
+    position: { x: number; y: number };
+  }> {
+    return apiCall("/project/updatenode/position", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
   // Create edge
   async createEdge(data: CreateEdgeRequest): Promise<CreateEdgeResponse> {
     return apiCall<CreateEdgeResponse>("/project/makeedge", {
@@ -105,6 +126,22 @@ export const projectApi = {
   async deleteEdge(data: DeleteEdgeRequest): Promise<DeleteEdgeResponse> {
     return apiCall<DeleteEdgeResponse>("/project/deleteedge", {
       method: "DELETE",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Execute flow
+  async executeFlow(data: ExecuteFlowRequest): Promise<ExecuteFlowResponse> {
+    return apiCall<ExecuteFlowResponse>("/project/execute-flow", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Analyze flow
+  async analyzeFlow(data: AnalyzeFlowRequest): Promise<AnalyzeFlowResponse> {
+    return apiCall<AnalyzeFlowResponse>("/project/analyze-flow", {
+      method: "POST",
       body: JSON.stringify(data),
     });
   },
@@ -136,6 +173,81 @@ export const codeApi = {
     return apiCall<SaveNodeCodeResponse>("/code/savecode", {
       method: "POST",
       body: JSON.stringify(data),
+    });
+  },
+
+  // Execute single node
+  async executeNode(data: {
+    project_id: string;
+    node_id: string;
+    input_data?: Record<string, unknown>;
+  }): Promise<{
+    success: boolean;
+    output?: unknown;
+    error?: string;
+    traceback?: string;
+    output_raw?: string;
+    node_id: string;
+  }> {
+    return apiCall("/code/execute-node", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Package management
+  async installPackage(data: {
+    project_id: string;
+    package: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    project_id: string;
+    package: string;
+  }> {
+    return apiCall("/code/packages/install", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async uninstallPackage(data: {
+    project_id: string;
+    package: string;
+  }): Promise<{
+    success: boolean;
+    message: string;
+    project_id: string;
+    package: string;
+  }> {
+    return apiCall("/code/packages/uninstall", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getPackages(data: {
+    project_id: string;
+  }): Promise<{
+    success: boolean;
+    project_id: string;
+    packages: Array<{ name: string; version: string }>;
+    python_executable: string;
+  }> {
+    return apiCall("/code/packages/list", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getPackageInfo(project_id: string, packageName: string): Promise<{
+    success: boolean;
+    project_id: string;
+    package: string;
+    info: Record<string, string>;
+  }> {
+    return apiCall(`/code/packages/info?project_id=${project_id}&package=${packageName}`, {
+      method: "POST",
     });
   },
 };

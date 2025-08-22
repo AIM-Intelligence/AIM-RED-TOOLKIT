@@ -14,13 +14,20 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { DefaultNodeType } from "../../../components/nodes/DefaultNode";
+import type { StartNodeType } from "../../../components/nodes/StartNode";
+import type { ResultNodeType } from "../../../components/nodes/ResultNode";
 import DefaultNode from "../../../components/nodes/DefaultNode";
+import StartNode from "../../../components/nodes/StartNode";
+import ResultNode from "../../../components/nodes/ResultNode";
 import DefaultEdge from "../../../components/edges/DefaultEdge";
 
+// Union type for all node types
+type AnyNodeType = DefaultNodeType | StartNodeType | ResultNodeType;
+
 interface ProjectFlowProps {
-  nodes: DefaultNodeType[];
+  nodes: AnyNodeType[];
   edges: Edge[];
-  onNodesChange: OnNodesChange<DefaultNodeType>;
+  onNodesChange: OnNodesChange<AnyNodeType>;
   onEdgesChange: OnEdgesChange<Edge>;
   onConnect: (connection: Connection) => void;
   isValidConnection: (connection: Edge | Connection) => boolean;
@@ -39,7 +46,9 @@ export default function ProjectFlow({
   // Define node types
   const nodeTypes = useMemo<NodeTypes>(
     () => ({
-      default: DefaultNode,
+      custom: DefaultNode,
+      start: StartNode,
+      result: ResultNode,
     }),
     []
   );

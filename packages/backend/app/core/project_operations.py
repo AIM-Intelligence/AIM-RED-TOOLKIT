@@ -1,5 +1,6 @@
 import json
 import shutil
+import os
 from pathlib import Path
 from typing import List, Dict, Any
 from .projects_registry import (
@@ -7,8 +8,10 @@ from .projects_registry import (
     remove_project_from_registry,
     get_projects_registry
 )
+from .venv_manager import VenvManager
 
-PROJECTS_BASE_PATH = Path("projects")
+# Get absolute path to projects directory
+PROJECTS_BASE_PATH = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "projects"
 
 def ensure_projects_dir() -> None:
     """Ensure the projects directory exists"""
@@ -56,14 +59,21 @@ def create_project(project_name: str, project_description: str, project_id: str)
         raise e
 
 def delete_project(project_name: str, project_id:str) -> Dict[str, Any]:
-    """Delete entire project folder and remove from registry"""
+    """Delete entire project folder including venv and remove from registry"""
     ensure_projects_dir()
     project_path = PROJECTS_BASE_PATH / project_id
     
     if not project_path.exists():
         raise ValueError(f"Project with ID '{project_id}' does not exist")
     
-    # Delete folder first
+    # Delete virtual environment if it exists
+    try:
+        venv_manager = VenvManager(str(PROJECTS_BASE_PATH))
+        venv_manager.delete_venv(project_id)
+    except Exception as e:
+        print(f"Warning: Failed to delete venv for project {project_id}: {e}")
+    
+    # Delete folder
     shutil.rmtree(project_path)
     
     # Remove from registry

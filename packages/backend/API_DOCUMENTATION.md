@@ -190,7 +190,7 @@ Get specific project's node-edge structure
     "nodes": [
       {
         "id": "1",
-        "type": "default",
+        "type": "custom",
         "position": {"x": 100, "y": 100},
         "data": {
           "title": "Data Input",
@@ -270,7 +270,7 @@ Create a new node in a project
 {
   "project_id": "unique_project_id",
   "node_id": "2",
-  "node_type": "default",
+  "node_type": "custom",
   "position": {"x": 400, "y": 100},
   "data": {
     "title": "Preprocessing",
@@ -286,7 +286,7 @@ Create a new node in a project
   "message": "Node 'Preprocessing' created successfully",
   "node": {
     "id": "2",
-    "type": "default",
+    "type": "custom",
     "position": {"x": 400, "y": 100},
     "data": {
       "title": "Preprocessing",
@@ -415,7 +415,7 @@ projects/
   "nodes": [
     {
       "id": "1",
-      "type": "default",
+      "type": "custom",
       "position": {"x": 100, "y": 100},
       "data": {
         "title": "Node Title",

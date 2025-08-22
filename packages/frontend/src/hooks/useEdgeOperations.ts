@@ -1,11 +1,18 @@
 import { useCallback, useEffect } from "react";
 import { addEdge, type Connection, type Edge, MarkerType } from "@xyflow/react";
 import { projectApi } from "../utils/api";
+import type { DefaultNodeType } from "../components/nodes/DefaultNode";
+import type { StartNodeType } from "../components/nodes/StartNode";
+import type { ResultNodeType } from "../components/nodes/ResultNode";
+
+// Union type for all node types
+type AnyNodeType = DefaultNodeType | StartNodeType | ResultNodeType;
 
 interface UseEdgeOperationsProps {
   projectId: string | undefined;
   edges: Edge[];
   setEdges: React.Dispatch<React.SetStateAction<Edge[]>>;
+  nodes?: AnyNodeType[]; // Use proper node type
 }
 
 interface UseEdgeOperationsReturn {
@@ -17,6 +24,7 @@ export function useEdgeOperations({
   projectId,
   edges,
   setEdges,
+  nodes = [],
 }: UseEdgeOperationsProps): UseEdgeOperationsReturn {
   // Validate connection
   const isValidConnection = useCallback((connection: Edge | Connection) => {
@@ -28,13 +36,38 @@ export function useEdgeOperations({
       return false;
     }
 
+    // Check if target is a ResultNode
+    const targetNode = nodes.find(node => node.id === target);
+    if (targetNode && targetNode.type === 'result') {
+      // Check if ResultNode already has an incoming edge
+      const hasIncomingEdge = edges.some(edge => edge.target === target);
+      if (hasIncomingEdge) {
+        console.log("ResultNode can only have one incoming connection");
+        return false;
+      }
+    }
+
     return true;
-  }, []);
+  }, [edges, nodes]);
 
   // Handle connection creation
   const onConnect = useCallback(
     async (connection: Connection) => {
       if (!projectId) return;
+
+      // Check if connection is valid first
+      if (!isValidConnection(connection)) {
+        // Check specifically for ResultNode constraint
+        const targetNode = nodes.find(node => node.id === connection.target);
+        if (targetNode && targetNode.type === 'result') {
+          const hasIncomingEdge = edges.some(edge => edge.target === connection.target);
+          if (hasIncomingEdge) {
+            alert("Result nodes can only receive one incoming connection");
+            return;
+          }
+        }
+        return;
+      }
 
       // Check for duplicate connections
       const isDuplicate = edges.some(
@@ -87,7 +120,7 @@ export function useEdgeOperations({
         );
       }
     },
-    [edges, setEdges, projectId]
+    [edges, setEdges, projectId, nodes, isValidConnection]
   );
 
   // Edge deletion handler
