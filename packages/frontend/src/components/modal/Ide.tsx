@@ -12,6 +12,7 @@ import {
   createModel,
   disposeModel,
 } from "../../lsp/monacoSetup";
+import ProjectTerminal from "../terminal/ProjectTerminal";
 
 interface IdeModalProps {
   isOpen: boolean;
@@ -42,17 +43,12 @@ const IdeModal: React.FC<IdeModalProps> = ({
     "loading"
   );
   const [runResult, setRunResult] = useState<string>("");
-  const [installedPackages, setInstalledPackages] = useState<
-    Array<{ name: string; version: string }>
-  >([]);
-  const [showPackageManager, setShowPackageManager] = useState(false);
-  const [packageInput, setPackageInput] = useState("");
-  const [isInstallingPackage, setIsInstallingPackage] = useState(false);
   const [lspConnection, setLspConnection] = useState<LSPConnection | null>(
     null
   );
   const [isLspConnecting, setIsLspConnecting] = useState(false);
   const modelRef = useRef<Monaco.editor.ITextModel | null>(null);
+  const [showTerminal, setShowTerminal] = useState(false);
 
   // Fetch installed packages
   const fetchPackages = useCallback(async () => {
@@ -61,78 +57,24 @@ const IdeModal: React.FC<IdeModalProps> = ({
     try {
       const data = await codeApi.getPackages({ project_id: projectId });
       if (data.success) {
-        setInstalledPackages(data.packages);
+        console.log(`${data.packages} Installed`);
       }
     } catch (error) {
       console.error("Error fetching packages:", error);
     }
   }, [projectId]);
 
-  // Install package
-  const handleInstallPackage = async () => {
-    if (!packageInput.trim() || !projectId) return;
+  // Handle package changes from terminal
+  const handleTerminalPackageChanged = useCallback(async () => {
+    // Refresh package list
+    await fetchPackages();
 
-    setIsInstallingPackage(true);
-    try {
-      const result = await codeApi.installPackage({
-        project_id: projectId,
-        package: packageInput.trim(),
-      });
-
-      if (result.success) {
-        await fetchPackages();
-        setPackageInput("");
-        alert(`Successfully installed ${packageInput}`);
-        // Restart LSP to pick up new packages
-        if (lspConnection) {
-          await lspConnection.restart();
-        }
-      } else {
-        alert(`Failed to install ${packageInput}: ${result.message}`);
-      }
-    } catch (error) {
-      console.error("Error installing package:", error);
-      alert(
-        `Error installing package: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    } finally {
-      setIsInstallingPackage(false);
+    // Restart LSP to pick up changes
+    if (lspConnection) {
+      console.log("Restarting LSP after terminal package change");
+      await lspConnection.restart();
     }
-  };
-
-  // Uninstall package
-  const handleUninstallPackage = async (packageName: string) => {
-    if (!projectId) return;
-
-    if (!confirm(`Are you sure you want to uninstall ${packageName}?`)) return;
-
-    try {
-      const result = await codeApi.uninstallPackage({
-        project_id: projectId,
-        package: packageName,
-      });
-
-      if (result.success) {
-        await fetchPackages();
-        alert(`Successfully uninstalled ${packageName}`);
-        // Restart LSP to reflect removed packages
-        if (lspConnection) {
-          await lspConnection.restart();
-        }
-      } else {
-        alert(`Failed to uninstall ${packageName}: ${result.message}`);
-      }
-    } catch (error) {
-      console.error("Error uninstalling package:", error);
-      alert(
-        `Error uninstalling package: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    }
-  };
+  }, [fetchPackages, lspConnection]);
 
   // Fetch code from backend when modal opens
   const fetchCode = useCallback(async () => {
@@ -148,12 +90,14 @@ const IdeModal: React.FC<IdeModalProps> = ({
 
       if (data.success && data.code) {
         setCode(data.code);
-        if (editorRef.current) {
-          editorRef.current.setValue(data.code);
+        if (editorRef.current && modelRef.current) {
+          // Update model value directly instead of setValue on editor
+          modelRef.current.setValue(data.code);
         }
       }
     } catch (error) {
       console.error("Error fetching code:", error);
+      // If fetch fails, keep the default code
     } finally {
       setIsLoadingCode(false);
     }
@@ -319,6 +263,13 @@ const IdeModal: React.FC<IdeModalProps> = ({
         /\s+/g,
         "_"
       )}.py`;
+
+      // Dispose old model if exists
+      if (modelRef.current) {
+        disposeModel(modelRef.current);
+      }
+
+      // Create new model with current code
       const model = createModel(code, "python", fileUri);
       modelRef.current = model;
       editor.setModel(model);
@@ -403,7 +354,7 @@ const IdeModal: React.FC<IdeModalProps> = ({
       >
         <div className="flex justify-between items-center p-4 border-b border-gray-700">
           <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-            Python IDE - {nodeTitle}
+            {nodeTitle}
             {isLoadingCode && (
               <span className="text-sm text-gray-400">(Loading...)</span>
             )}
@@ -411,19 +362,48 @@ const IdeModal: React.FC<IdeModalProps> = ({
           <X onClose={onClose} />
         </div>
 
-        <div className="flex-1 p-4 bg-neutral-900">
-          <Editor
-            height="100%"
-            defaultLanguage="python"
-            defaultValue={code}
-            theme="vs-dark"
-            onMount={handleEditorDidMount}
-            options={{
-              automaticLayout: true,
-              minimap: { enabled: true },
-              fontSize: 14,
-            }}
-          />
+        <div
+          className={`flex-1 flex ${
+            showTerminal ? "flex-col" : ""
+          } bg-neutral-900`}
+        >
+          <div className={`${showTerminal ? "flex-1" : "h-full"} p-4`}>
+            <Editor
+              height="100%"
+              defaultLanguage="python"
+              value={code}
+              theme="vs-dark"
+              onMount={handleEditorDidMount}
+              loading={
+                <div className="flex items-center justify-center h-full text-gray-400">
+                  Loading editor...
+                </div>
+              }
+              options={{
+                automaticLayout: true,
+                minimap: { enabled: true },
+                fontSize: 14,
+              }}
+            />
+          </div>
+
+          {showTerminal && (
+            <div
+              className="border-t border-gray-700"
+              style={{
+                height: `${300}px`,
+                minHeight: "200px",
+                maxHeight: "500px",
+              }}
+            >
+              <ProjectTerminal
+                projectId={projectId}
+                mode="pkg"
+                onPackageChanged={handleTerminalPackageChanged}
+                height={`${290}px`}
+              />
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-gray-700 flex justify-between">
@@ -438,7 +418,6 @@ const IdeModal: React.FC<IdeModalProps> = ({
               onClick={handleRunCode}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-2"
             >
-              <span>▶️</span>
               Run
             </button>
             <SimpleExportButton
@@ -448,87 +427,16 @@ const IdeModal: React.FC<IdeModalProps> = ({
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => setShowPackageManager(!showPackageManager)}
-              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors flex items-center gap-2"
+              onClick={() => setShowTerminal(!showTerminal)}
+              className={`px-4 py-2 ${
+                showTerminal
+                  ? "bg-orange-600 hover:bg-orange-700"
+                  : "bg-gray-600 hover:bg-gray-700"
+              } text-white rounded transition-colors flex items-center gap-2`}
+              title={showTerminal ? "Hide Terminal" : "Show Terminal"}
             >
-              Packages
+              Terminal
             </button>
-          </div>
-        </div>
-
-        {/* Package Manager Slide-out Panel */}
-        <div
-          className={`absolute top-0 right-0 h-full w-80 bg-neutral-900 border-l border-gray-700 transform transition-transform ${
-            showPackageManager ? "translate-x-0" : "translate-x-full"
-          } z-10`}
-        >
-          <div className="p-4 border-b border-gray-700 flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-white">
-              Package Manager
-            </h3>
-            <button
-              onClick={() => setShowPackageManager(false)}
-              className="text-gray-400 hover:text-white"
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="p-4">
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Install Package
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={packageInput}
-                  onChange={(e) => setPackageInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleInstallPackage()}
-                  placeholder="e.g., numpy, pandas==2.0.0"
-                  className="flex-1 px-3 py-2 bg-neutral-800 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                  disabled={isInstallingPackage}
-                />
-                <button
-                  onClick={handleInstallPackage}
-                  disabled={isInstallingPackage || !packageInput.trim()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isInstallingPackage ? "Installing..." : "Install"}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-sm font-medium text-gray-300 mb-2">
-                Installed Packages ({installedPackages.length})
-              </h4>
-              <div className="max-h-96 overflow-y-auto">
-                {installedPackages.length === 0 ? (
-                  <p className="text-gray-500 text-sm">No packages installed</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {installedPackages.map((pkg) => (
-                      <li
-                        key={pkg.name}
-                        className="flex justify-between items-center px-3 py-2 bg-neutral-800 rounded hover:bg-neutral-700 group"
-                      >
-                        <span className="text-white text-sm">
-                          {pkg.name}{" "}
-                          <span className="text-gray-500">v{pkg.version}</span>
-                        </span>
-                        <button
-                          onClick={() => handleUninstallPackage(pkg.name)}
-                          className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity text-sm"
-                        >
-                          Uninstall
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
           </div>
         </div>
 

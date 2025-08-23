@@ -1,10 +1,10 @@
 import * as monaco from 'monaco-editor';
+import { MonacoLanguageClient } from 'monaco-languageclient';
 import {
-  MonacoLanguageClient,
   CloseAction,
   ErrorAction,
   MessageTransports,
-} from 'monaco-languageclient';
+} from 'vscode-languageclient/browser.js';
 import {
   toSocket,
   WebSocketMessageReader,
@@ -57,11 +57,14 @@ class LspClientConnection {
     
     this.setStatus('connecting');
     
+    // For WebSocket, we need to connect directly through the current host
+    // The Vite proxy will handle the routing to the backend
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const host = window.location.hostname;
-    const port = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+    const host = window.location.host; // This includes port
     const endpoint = this.lspType === 'pyright' ? 'python' : 'ruff';
-    const wsUrl = `${protocol}://${host}:${port}/api/lsp/${endpoint}?project_id=${encodeURIComponent(this.projectId)}`;
+    const wsUrl = `${protocol}://${host}/api/lsp/${endpoint}?project_id=${encodeURIComponent(this.projectId)}`;
+    
+    console.log(`Connecting to LSP ${this.lspType} at: ${wsUrl}`);
 
     try {
       this.webSocket = new WebSocket(wsUrl);
@@ -100,9 +103,8 @@ class LspClientConnection {
             closed: () => ({ action: CloseAction.DoNotRestart }), // We handle restart ourselves
           },
           synchronize: {
-            fileEvents: [
-              monaco.languages.createFilesystemWatcher('**/*.py'),
-            ],
+            // File watching is not supported in browser environment
+            // The server will handle file watching if needed
           },
           initializationOptions: this.getInitializationOptions(),
         },
@@ -115,10 +117,10 @@ class LspClientConnection {
       
       this.setStatus('connected');
       this.reconnectAttempt = 0;
-      console.log(`${this.lspType} LSP connected successfully`);
+      console.log(`${this.lspType} LSP connected successfully to ${wsUrl}`);
       
     } catch (error) {
-      console.error(`Failed to connect to ${this.lspType} LSP:`, error);
+      console.error(`Failed to connect to ${this.lspType} LSP at ${wsUrl}:`, error);
       this.setStatus('error');
       this.scheduleReconnect();
     }

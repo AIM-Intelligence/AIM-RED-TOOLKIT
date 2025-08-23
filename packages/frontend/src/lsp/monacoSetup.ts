@@ -1,13 +1,19 @@
 import * as monaco from 'monaco-editor';
-import { initServices } from '@codingame/monaco-vscode-api/services';
-import getConfigurationServiceOverride from '@codingame/monaco-vscode-api/service-override/configuration';
-import getKeybindingsServiceOverride from '@codingame/monaco-vscode-api/service-override/keybindings';
-import getThemeServiceOverride from '@codingame/monaco-vscode-api/service-override/theme';
-import getTextmateServiceOverride from '@codingame/monaco-vscode-api/service-override/textmate';
-import getLanguagesServiceOverride from '@codingame/monaco-vscode-api/service-override/languages';
-import getModelServiceOverride from '@codingame/monaco-vscode-api/service-override/model';
+import { initialize } from '@codingame/monaco-vscode-api';
+import getConfigurationServiceOverride from '@codingame/monaco-vscode-configuration-service-override';
+import getKeybindingsServiceOverride from '@codingame/monaco-vscode-keybindings-service-override';
+import getThemeServiceOverride from '@codingame/monaco-vscode-theme-service-override';
+import getTextmateServiceOverride from '@codingame/monaco-vscode-textmate-service-override';
+import getLanguagesServiceOverride from '@codingame/monaco-vscode-languages-service-override';
+import getModelServiceOverride from '@codingame/monaco-vscode-model-service-override';
+import '@codingame/monaco-vscode-theme-defaults-default-extension';
+
+// Import oniguruma WASM loading utilities
+import { loadWASM } from 'vscode-oniguruma';
+import onigWasmUrl from 'vscode-oniguruma/release/onig.wasm?url';
 
 let isInitialized = false;
+let initPromise: Promise<void> | null = null;
 
 /**
  * Initialize Monaco services for LSP support
@@ -18,16 +24,36 @@ export async function initializeMonacoServices(): Promise<void> {
     return;
   }
 
-  try {
-    // Initialize VSCode API services required for LSP
-    await initServices({
-      ...getConfigurationServiceOverride(),
-      ...getKeybindingsServiceOverride(),
-      ...getThemeServiceOverride(),
-      ...getTextmateServiceOverride(),
-      ...getLanguagesServiceOverride(),
-      ...getModelServiceOverride(),
-    });
+  // Return existing promise if initialization is in progress
+  if (initPromise) {
+    return initPromise;
+  }
+
+  initPromise = (async () => {
+    try {
+      // Load oniguruma WASM for textmate tokenization
+      console.log('[Monaco] Loading oniguruma WASM from:', onigWasmUrl);
+      const wasmResponse = await fetch(onigWasmUrl);
+      if (!wasmResponse.ok) {
+        console.warn(`[Monaco] Failed to load WASM: ${wasmResponse.status}. Continuing without textmate support.`);
+        // Continue initialization without WASM - editor will still work
+      } else {
+        const wasmBuffer = await wasmResponse.arrayBuffer();
+        await loadWASM(wasmBuffer);
+        console.log('[Monaco] Successfully loaded oniguruma WASM');
+      }
+
+      // Initialize VSCode API services required for LSP
+      console.log('[Monaco] Initializing VSCode API services...');
+      await initialize({
+        ...getModelServiceOverride(),
+        ...getConfigurationServiceOverride(),
+        ...getKeybindingsServiceOverride(),
+        ...getThemeServiceOverride(),
+        ...getTextmateServiceOverride(),
+        ...getLanguagesServiceOverride(),
+      });
+      console.log('[Monaco] VSCode API services initialized');
 
     // Register Python language if not already registered
     if (!monaco.languages.getLanguages().some(lang => lang.id === 'python')) {
@@ -88,12 +114,18 @@ export async function initializeMonacoServices(): Promise<void> {
     // Set default theme
     monaco.editor.setTheme('vs-dark');
 
-    isInitialized = true;
-    console.log('Monaco services initialized successfully');
-  } catch (error) {
-    console.error('Failed to initialize Monaco services:', error);
-    throw error;
-  }
+      isInitialized = true;
+      console.log('[Monaco] Services initialized successfully');
+    } catch (error) {
+      console.error('[Monaco] Failed to initialize services:', error);
+      console.warn('[Monaco] App will continue without full Monaco features');
+      // Mark as initialized to prevent repeated attempts
+      isInitialized = true;
+      // Don't throw to prevent app crash - editor can work with reduced features
+    }
+  })();
+
+  return initPromise;
 }
 
 /**

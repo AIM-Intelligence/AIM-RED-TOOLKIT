@@ -114,25 +114,29 @@ class VenvManager:
         except Exception as e:
             print(f"Error generating pyrightconfig.json: {e}")
     
-    def ensure_venv(self, project_id: str) -> str:
-        """Ensure a virtual environment exists and return the Python executable"""
+    def get_venv_python(self, project_id: str) -> str:
+        """Get the Python executable for an existing virtual environment"""
         if not self.venv_exists(project_id):
-            self.create_venv(project_id)
-        else:
-            # Ensure pyrightconfig.json exists even for existing venvs
-            project_dir = self.projects_root / project_id
-            config_path = project_dir / "pyrightconfig.json"
-            if not config_path.exists():
-                self._generate_pyright_config(project_id)
+            raise ValueError(f"Virtual environment not found for project {project_id}. Please recreate the project.")
+        
+        # Ensure pyrightconfig.json exists even for existing venvs
+        project_dir = self.projects_root / project_id
+        config_path = project_dir / "pyrightconfig.json"
+        if not config_path.exists():
+            self._generate_pyright_config(project_id)
         return self.get_python_executable(project_id)
+    
+    # Keep ensure_venv as alias for backward compatibility, but it no longer creates venv
+    def ensure_venv(self, project_id: str) -> str:
+        """Alias for get_venv_python - does NOT create venv if it doesn't exist"""
+        return self.get_venv_python(project_id)
     
     def install_package(self, project_id: str, package: str) -> Tuple[bool, str]:
         """Install a package in the project's virtual environment"""
         try:
-            # Create venv if it doesn't exist (explicit user action)
+            # Virtual environment should already exist
             if not self.venv_exists(project_id):
-                if not self.create_venv(project_id):
-                    return False, "Failed to create virtual environment"
+                return False, f"Virtual environment not found for project {project_id}. Please recreate the project."
             
             pip_exe = self.get_pip_executable(project_id)
             
@@ -238,7 +242,10 @@ class VenvManager:
         import tempfile
         
         try:
-            python_exe = self.ensure_venv(project_id)
+            # Get Python executable - venv should already exist
+            if not self.venv_exists(project_id):
+                return {"success": False, "error": f"Virtual environment not found for project {project_id}"}
+            python_exe = self.get_python_executable(project_id)
             
             # Create temporary file for code
             with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:

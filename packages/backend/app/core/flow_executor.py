@@ -260,7 +260,17 @@ except Exception as e:
         
         # Execute with isolation using project's virtual environment
         start_time = time.time()
-        python_exe = self.venv_manager.ensure_venv(project_id)
+        
+        # Virtual environment should already exist (created with project)
+        if not self.venv_manager.venv_exists(project_id):
+            return {
+                "node_id": node_id,
+                "success": False,
+                "error": f"Virtual environment not found for project {project_id}. Please recreate the project.",
+                "execution_time_ms": 0
+            }
+        
+        python_exe = self.venv_manager.get_python_executable(project_id)
         project_dir = str(self.projects_root / project_id)
         execution_result = execute_python_code(wrapper_code, timeout, python_exe, project_dir)
         execution_time_ms = round((time.time() - start_time) * 1000)

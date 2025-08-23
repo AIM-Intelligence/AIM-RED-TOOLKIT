@@ -21,10 +21,12 @@ A visual flow-based Python IDE with VS Code-level development experience through
 - Docker and Docker Compose installed
 - Node.js 20+ and pnpm (for local development)
 - Python 3.11+ (for local development)
+- NEVER erase "projects" folder in backend directory!
 
 ### 🚀 Running with Docker (Recommended)
 
 #### Development Mode
+
 ```bash
 # Clone the repository
 git clone https://github.com/AIM-Intelligence/AIM-RED-TOOLKIT.git
@@ -40,6 +42,7 @@ docker-compose -f docker-compose.dev.yml up --build
 ```
 
 #### Production Mode
+
 ```bash
 # Build and run production containers
 docker-compose -f docker-compose.prod.yml up --build
@@ -105,6 +108,7 @@ def process(input_data):
 ```
 
 To install packages:
+
 1. Open the IDE for a node
 2. Use the package manager in the UI
 3. LSP automatically restarts to recognize new packages
@@ -112,6 +116,7 @@ To install packages:
 ## API Endpoints
 
 ### Core Endpoints
+
 - `GET /` - API information
 - `GET /api/health` - Health check
 - `POST /api/code/execute` - Execute Python code
@@ -120,6 +125,7 @@ To install packages:
 - `POST /api/project/execute-flow` - Execute node flow
 
 ### LSP Management
+
 - `WS /api/lsp/python` - Pyright LSP WebSocket
 - `WS /api/lsp/ruff` - Ruff LSP WebSocket
 - `GET /api/lsp/health` - Check LSP status
@@ -127,6 +133,7 @@ To install packages:
 - `GET /api/lsp/logs` - View LSP event logs
 
 ### Package Management
+
 - `POST /api/code/packages/install` - Install Python package
 - `POST /api/code/packages/uninstall` - Remove package
 - `GET /api/code/packages/list` - List installed packages
@@ -159,6 +166,7 @@ docker-compose down -v
 ## Monitoring LSP Health
 
 ### Check LSP Status
+
 ```bash
 # Check both Pyright and Ruff status for a project
 curl http://localhost:8000/api/lsp/health?project_id=your_project_id
@@ -168,6 +176,7 @@ curl http://localhost:8000/api/lsp/status
 ```
 
 ### View LSP Logs
+
 ```bash
 # Recent LSP events
 curl http://localhost:8000/api/lsp/logs?n=50
@@ -177,6 +186,7 @@ curl "http://localhost:8000/api/lsp/stdio?project_id=your_project_id&lsp_type=py
 ```
 
 ### Restart LSP if Needed
+
 ```bash
 # Restart Pyright for a project
 curl -X POST "http://localhost:8000/api/lsp/restart/pyright?project_id=your_project_id"
@@ -188,6 +198,7 @@ curl -X POST "http://localhost:8000/api/lsp/restart/ruff?project_id=your_project
 ## Environment Variables
 
 ### Backend (LSP Configuration)
+
 ```bash
 LSP_LOG_LEVEL=DEBUG          # Log level: DEBUG, INFO, WARNING, ERROR
 LSP_IDLE_TTL_MS=600000       # Idle timeout before stopping LSP (10 min)
@@ -196,6 +207,7 @@ LSP_RESTART_WINDOW_MS=60000  # Time window for restart counting
 ```
 
 ### Frontend
+
 ```bash
 VITE_API_URL=http://backend:8000  # Backend API URL
 ```
@@ -205,11 +217,13 @@ VITE_API_URL=http://backend:8000  # Backend API URL
 ### LSP Not Working?
 
 1. **Check if LSP is running**:
+
    ```bash
    curl http://localhost:8000/api/lsp/health?project_id=your_project_id
    ```
 
 2. **View LSP logs**:
+
    ```bash
    docker-compose logs backend | grep -i lsp
    ```
@@ -246,6 +260,7 @@ docker exec aim-red-backend-dev pyright --version
 ## Development Tips
 
 ### Testing LSP Locally
+
 ```bash
 # Test Pyright directly
 cd packages/backend
@@ -256,6 +271,7 @@ ruff server
 ```
 
 ### Adding New LSP Features
+
 1. Update `lsp_manager.py` for process management
 2. Modify `lsp.py` for WebSocket handling
 3. Enhance `pythonLspClient.ts` for frontend integration
@@ -301,9 +317,6 @@ MIT
 ## Support
 
 For issues and questions:
+
 - GitHub Issues: [Report bugs or request features](https://github.com/AIM-Intelligence/AIM-RED-TOOLKIT/issues)
 - Documentation: Check `/docs` folder for detailed guides
-
----
-
-Built with ❤️ for the Python community. Enjoy VS Code-level coding experience in your browser!

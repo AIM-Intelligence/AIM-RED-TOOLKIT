@@ -163,7 +163,15 @@ except Exception as e:
 """
         
         # Execute the code using project's virtual environment
-        python_exe = venv_manager.ensure_venv(request.project_id)
+        # Virtual environment should already exist (created with project)
+        if not venv_manager.venv_exists(request.project_id):
+            return {
+                "success": False,
+                "error": f"Virtual environment not found for project {request.project_id}. Please recreate the project.",
+                "node_id": request.node_id
+            }
+        
+        python_exe = venv_manager.get_python_executable(request.project_id)
         project_dir = os.path.join(PROJECTS_ROOT, request.project_id)
         execution_result = execute_python_code(wrapper_code, timeout=30, python_executable=python_exe, working_dir=project_dir)
         

@@ -23,7 +23,7 @@ def get_all_projects() -> List[Dict[str, str]]:
     return registry["projects"]
 
 def create_project(project_name: str, project_description: str, project_id: str) -> Dict[str, Any]:
-    """Create a new project folder and json file"""
+    """Create a new project folder and json file with virtual environment"""
     ensure_projects_dir()
     project_path = PROJECTS_BASE_PATH / project_id
     
@@ -48,6 +48,19 @@ def create_project(project_name: str, project_description: str, project_id: str)
         
         with open(project_json_path, 'w') as f:
             json.dump(initial_structure, f, indent=2)
+        
+        # Create virtual environment for the project
+        try:
+            venv_manager = VenvManager(str(PROJECTS_BASE_PATH))
+            venv_created = venv_manager.create_venv(project_id)
+            if venv_created:
+                print(f"✓ Virtual environment created for project {project_id}")
+            else:
+                print(f"✗ Failed to create virtual environment for project {project_id}")
+                # Don't fail the entire project creation if venv creation fails
+        except Exception as e:
+            print(f"✗ Error creating venv for project {project_id}: {e}")
+            # Don't fail the entire project creation if venv creation fails
         
         return {
             "success": True,

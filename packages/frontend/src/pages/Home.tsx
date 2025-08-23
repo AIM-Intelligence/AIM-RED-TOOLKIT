@@ -74,7 +74,11 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Error deleting project:", error);
-      alert(`Failed to delete project: ${error instanceof Error ? error.message : "Unknown error"}`);
+      alert(
+        `Failed to delete project: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     } finally {
       setIsDeleting(false);
     }
@@ -92,7 +96,7 @@ export default function Home() {
           <h1 className="text-4xl font-bold ">Projects</h1>
         </div>
 
-        <p className="text-gray-400 mb-8">
+        <p className="text-neutral-400 mb-8">
           Select a project or create a new one
         </p>
 
@@ -101,7 +105,7 @@ export default function Home() {
             <div
               key={project.project_id}
               onClick={() => handleProjectClick(project)}
-              className="bg-black border-2 border-gray-500 rounded-lg p-6 cursor-pointer hover:bg-gray-900 hover:border-red-700 transition-all duration-200 relative group"
+              className="bg-black border-2 border-neutral-500 rounded-lg p-6 cursor-pointer hover:bg-neutral-900 hover:border-red-700 transition-all duration-200 relative group"
             >
               {/* Header with icons */}
               <div className="flex justify-between items-start mb-2">
@@ -157,7 +161,7 @@ export default function Home() {
                   </button>
                 </div>
               </div>
-              <p className="text-gray-400 text-sm">
+              <p className="text-neutral-400 text-sm">
                 {project.project_description}
               </p>
             </div>
@@ -165,7 +169,7 @@ export default function Home() {
 
           <div
             onClick={handleCreateProject}
-            className="bg-black border-2 border-dashed border-gray-500 rounded-lg p-6 cursor-pointer hover:border-red-700 hover:bg-gray-900 hover:text-red-700 transition-all duration-200 flex items-center justify-center"
+            className="bg-black border-2 border-dashed border-neutral-500 rounded-lg p-6 cursor-pointer hover:border-red-700 hover:bg-neutral-900 hover:text-red-700 transition-all duration-200 flex items-center justify-center"
           >
             <div className="text-center">
               <div className="text-4xl mb-2">+</div>

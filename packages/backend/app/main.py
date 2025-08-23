@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
-from app.api import health, code, project, lsp, lsp_debug
+from app.api import health, code, project, lsp, lsp_debug, terminal
 from app.core.lsp_manager import lsp_manager
 from app.core.logging import get_logger
 
@@ -13,6 +13,11 @@ async def lifespan(app: FastAPI):
     """Manage application lifecycle"""
     # Startup
     logger.info("Starting AIM Red Toolkit Backend")
+    
+    # Ensure projects directory exists
+    from app.core.project_operations import ensure_projects_dir
+    ensure_projects_dir()
+    logger.info("Projects directory ready")
     
     # Start LSP idle collection task
     idle_task = asyncio.create_task(lsp_manager.idle_collect())
@@ -76,6 +81,9 @@ app.include_router(project.router, prefix="/api/project")
 # LSP endpoints (WebSocket and management)
 app.include_router(lsp.router, prefix="/api/lsp")
 app.include_router(lsp_debug.router, prefix="/api/lsp")
+
+# Terminal endpoint (WebSocket)
+app.include_router(terminal.router, prefix="/api")
 
 if __name__ == "__main__":
     import uvicorn
