@@ -22,8 +22,16 @@ def get_projects_registry() -> Dict[str, Any]:
     """Get the entire projects registry"""
     ensure_projects_registry()
     
-    with open(PROJECTS_REGISTRY_FILE, 'r') as f:
-        return json.load(f)
+    try:
+        with open(PROJECTS_REGISTRY_FILE, 'r') as f:
+            content = f.read()
+            if not content:
+                return {"projects": []}
+            return json.loads(content)
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"Error reading projects registry: {e}")
+        # Return empty registry if file is corrupted
+        return {"projects": []}
 
 def save_projects_registry(registry: Dict[str, Any]) -> None:
     """Save the projects registry"""

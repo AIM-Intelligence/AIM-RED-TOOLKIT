@@ -41,11 +41,43 @@ async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const error: ErrorResponse = await response.json();
-    throw new Error(error.detail || `API Error: ${response.statusText}`);
+    // Try to parse error response, but handle cases where it's not JSON
+    let errorMessage = `API Error: ${response.statusText}`;
+    try {
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const error: ErrorResponse = await response.json();
+        errorMessage = error.detail || errorMessage;
+      }
+    } catch (e) {
+      // If parsing fails, use the default error message
+      console.error("Failed to parse error response:", e);
+    }
+    throw new Error(errorMessage);
   }
 
-  return response.json();
+  // Check if response has content before trying to parse
+  const contentType = response.headers.get("content-type");
+  const contentLength = response.headers.get("content-length");
+  
+  // If response is empty or not JSON, return empty object
+  if (contentLength === "0" || !response.body) {
+    return {} as T;
+  }
+  
+  // Check if response is JSON
+  if (!contentType || !contentType.includes("application/json")) {
+    console.warn(`Expected JSON response but got ${contentType}`);
+    return {} as T;
+  }
+
+  // Try to parse JSON response
+  try {
+    return await response.json();
+  } catch (e) {
+    console.error("Failed to parse JSON response:", e);
+    return {} as T;
+  }
 }
 
 // ==================== Project APIs ====================

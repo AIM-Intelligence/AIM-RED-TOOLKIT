@@ -12,7 +12,9 @@ from typing import Literal, Optional, Dict, Any
 from datetime import datetime
 
 LOG_LEVEL = os.getenv("LSP_LOG_LEVEL", "INFO").upper()
-STDIO_DIR = pathlib.Path(os.getenv("LSP_STDIO_LOG_DIR", "/var/log/aim-red/lsp"))
+# Use local directory for logs instead of system directory
+STDIO_DIR = pathlib.Path(os.getenv("LSP_STDIO_LOG_DIR", 
+    str(pathlib.Path(__file__).parent.parent.parent / "logs" / "lsp")))
 STDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 # Recent events memory buffer for debug endpoint

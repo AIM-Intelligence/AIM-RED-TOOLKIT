@@ -27,7 +27,10 @@ export default function ProjectMaker({ isOpen, onClose }: ProjectMakerProps) {
     setIsLoading(true);
     setError(null);
 
-    const projectId = crypto.randomUUID();
+    // Generate a unique project ID (fallback for browsers that don't support crypto.randomUUID)
+    const projectId = typeof crypto !== 'undefined' && crypto.randomUUID 
+      ? crypto.randomUUID()
+      : `project-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
       const data = await projectApi.createProject({
@@ -49,7 +52,18 @@ export default function ProjectMaker({ isOpen, onClose }: ProjectMakerProps) {
       }
     } catch (err) {
       console.error("Error creating project:", err);
-      setError(err instanceof Error ? err.message : "Failed to create project");
+      let errorMessage = "Failed to create project";
+      
+      if (err instanceof Error) {
+        // Extract meaningful error message
+        if (err.message.includes("already exists")) {
+          errorMessage = "A project with this name already exists. Please choose a different name.";
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

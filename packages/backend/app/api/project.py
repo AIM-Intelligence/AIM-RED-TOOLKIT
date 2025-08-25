@@ -8,9 +8,25 @@ from ..core import (
     edge_operations
 )
 from ..core.flow_executor import FlowExecutor
+from ..core.enhanced_flow_executor import EnhancedFlowExecutor
 from ..core.flow_analyzer import FlowAnalyzer
 
 router = APIRouter()
+
+# Global executor instance to maintain object store across requests
+_global_executor = None
+
+def get_executor():
+    """Get or create the global executor instance"""
+    global _global_executor
+    if _global_executor is None:
+        import os
+        projects_root = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+            "projects"
+        )
+        _global_executor = EnhancedFlowExecutor(projects_root)
+    return _global_executor
 
 # Request/Response Models
 class CreateProjectRequest(BaseModel):
@@ -158,6 +174,11 @@ async def delete_project(request: DeleteProjectRequest):
     """Delete entire project folder"""
     try:
         result = project_operations.delete_project(request.project_name, request.project_id)
+        
+        # Clean up object store for this project
+        executor = get_executor()
+        executor.cleanup_project_store(request.project_id)
+        
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -246,13 +267,8 @@ async def delete_edge(request: DeleteEdgeRequest):
 async def execute_flow(request: ExecuteFlowRequest):
     """Execute the node flow starting from start node"""
     try:
-        # Initialize flow executor
-        import os
-        projects_root = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "projects"
-        )
-        executor = FlowExecutor(projects_root)
+        # Use global executor to maintain object store
+        executor = get_executor()
         
         # Execute the flow
         result = await executor.execute_flow(
