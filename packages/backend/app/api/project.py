@@ -60,6 +60,8 @@ class CreateEdgeRequest(BaseModel):
     edge_type: str = "bezier"
     source: str
     target: str
+    source_handle: Optional[str] = None
+    target_handle: Optional[str] = None
     marker_end: Optional[Dict[str, Any]] = None
 
 class DeleteEdgeRequest(BaseModel):
@@ -242,7 +244,9 @@ async def make_edge(request: CreateEdgeRequest):
             request.edge_type,
             request.source,
             request.target,
-            request.marker_end
+            request.marker_end,
+            request.source_handle,
+            request.target_handle
         )
         return result
     except ValueError as e:

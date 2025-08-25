@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { projectApi } from "../utils/api";
+import { projectApi, codeApi } from "../utils/api";
 import type { ProjectStructure, ProjectNode, ProjectEdge } from "../types";
 import type { DefaultNodeType } from "../components/nodes/DefaultNode";
 import type { StartNodeType } from "../components/nodes/StartNode";
@@ -118,7 +118,59 @@ export function useProjectData(
                 },
           }));
 
-          setTransformedNodes(nodes);
+          // Fetch metadata for custom nodes
+          const nodesWithMetadata = await Promise.all(
+            nodes.map(async (node) => {
+              if (node.type === 'custom') {
+                try {
+                  const metadataResult = await codeApi.getNodeMetadata({
+                    project_id: projectId,
+                    node_id: node.id,
+                    node_data: { data: node.data }
+                  });
+                  
+                  console.log(`Metadata for node ${node.id}:`, metadataResult);
+                  
+                  if (metadataResult.success && metadataResult.metadata) {
+                    const metadata = metadataResult.metadata;
+                    
+                    // Convert metadata to port format
+                    const inputs = metadata.inputs?.map((input: any) => ({
+                      id: input.name,
+                      label: input.name,
+                      type: input.type,
+                      required: input.required !== false,
+                      default: input.default,
+                    }));
+                    
+                    const outputs = metadata.outputs?.map((output: any) => ({
+                      id: output.name,
+                      label: output.name,
+                      type: output.type,
+                      required: false,
+                      default: undefined,
+                    }));
+                    
+                    // Return node with metadata
+                    return {
+                      ...node,
+                      data: {
+                        ...node.data,
+                        mode: metadata.mode,
+                        inputs: inputs,
+                        outputs: outputs,
+                      },
+                    };
+                  }
+                } catch (error) {
+                  console.error(`Failed to fetch metadata for node ${node.id}:`, error);
+                }
+              }
+              return node;
+            })
+          );
+
+          setTransformedNodes(nodesWithMetadata);
           setTransformedEdges(edges);
 
           // Update node counter based on existing nodes

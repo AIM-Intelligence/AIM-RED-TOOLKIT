@@ -1,7 +1,8 @@
 from typing import Dict, Any, Optional
 
 def create_edge(project_id: str, edge_id: str, edge_type: str, source: str, target: str, 
-                marker_end: Optional[Dict] = None, **kwargs) -> Dict[str, Any]:
+                marker_end: Optional[Dict] = None, source_handle: Optional[str] = None,
+                target_handle: Optional[str] = None, **kwargs) -> Dict[str, Any]:
     """Create a new edge between nodes matching React Flow structure"""
     from .project_structure import get_project_structure, save_project_structure
     
@@ -24,8 +25,8 @@ def create_edge(project_id: str, edge_id: str, edge_type: str, source: str, targ
         "type": edge_type,
         "source": source,
         "target": target,
-        "sourceHandle": None,  # Explicitly set to None for ReactFlow compatibility
-        "targetHandle": None   # Explicitly set to None for ReactFlow compatibility
+        "sourceHandle": source_handle,  # Can be None or specific handle ID
+        "targetHandle": target_handle   # Can be None or specific handle ID
     }
     
     # Add markerEnd if provided
@@ -37,7 +38,7 @@ def create_edge(project_id: str, edge_id: str, edge_type: str, source: str, targ
     
     # Add any additional properties
     for key, value in kwargs.items():
-        if key not in ["id", "type", "source", "target", "sourceHandle", "targetHandle", "markerEnd"] and value is not None:
+        if key not in ["id", "type", "source", "target", "sourceHandle", "targetHandle", "markerEnd", "source_handle", "target_handle"] and value is not None:
             new_edge[key] = value
     
     structure['edges'].append(new_edge)

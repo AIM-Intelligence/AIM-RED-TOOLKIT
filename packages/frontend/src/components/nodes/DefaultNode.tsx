@@ -2,13 +2,9 @@ import { useState } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import clsx from "clsx";
 import LoadingModal from "../modal/LoadingModal";
+import type { NodeData } from "../../types";
 
-export type DefaultNodeType = Node<{
-  title: string;
-  description: string;
-  file?: string; // File path reference for the node's Python code
-  viewCode: () => void;
-}>;
+export type DefaultNodeType = Node<NodeData>;
 
 export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
   const [hovering, setHovering] = useState(false);
@@ -96,25 +92,101 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
           </button>
         </div>
 
-        <Handle
-          type="target"
-          position={Position.Left}
-          className="w-3 h-3"
-          style={{
-            left: -6,
-            top: `${30}px`,
-          }}
-        />
+        {/* Input Handles */}
+        {props.data.inputs && props.data.inputs.length > 0 ? (
+          props.data.inputs.map((input, index) => {
+            const totalInputs = props.data.inputs!.length;
+            const spacing = 100 / (totalInputs + 1);
+            const topPosition = spacing * (index + 1);
+            
+            return (
+              <div key={`input-${input.id}`}>
+                <Handle
+                  type="target"
+                  position={Position.Left}
+                  id={input.id}
+                  className="w-3 h-3"
+                  style={{
+                    left: -6,
+                    top: `${topPosition}%`,
+                  }}
+                  title={`${input.label} (${input.type})${input.required ? ' *' : ''}`}
+                />
+                {hovering && (
+                  <div
+                    className="absolute text-xs text-neutral-400 pointer-events-none"
+                    style={{
+                      left: 8,
+                      top: `${topPosition}%`,
+                      transform: 'translateY(-50%)',
+                    }}
+                  >
+                    {input.label}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        ) : (
+          // Fallback to single input handle
+          <Handle
+            type="target"
+            position={Position.Left}
+            className="w-3 h-3"
+            style={{
+              left: -6,
+              top: `50%`,
+            }}
+          />
+        )}
 
-        <Handle
-          type="source"
-          position={Position.Right}
-          className="w-3 h-3"
-          style={{
-            right: -6,
-            top: `${30}px`,
-          }}
-        />
+        {/* Output Handles */}
+        {props.data.outputs && props.data.outputs.length > 0 ? (
+          props.data.outputs.map((output, index) => {
+            const totalOutputs = props.data.outputs!.length;
+            const spacing = 100 / (totalOutputs + 1);
+            const topPosition = spacing * (index + 1);
+            
+            return (
+              <div key={`output-${output.id}`}>
+                <Handle
+                  type="source"
+                  position={Position.Right}
+                  id={output.id}
+                  className="w-3 h-3"
+                  style={{
+                    right: -6,
+                    top: `${topPosition}%`,
+                  }}
+                  title={`${output.label} (${output.type})`}
+                />
+                {hovering && (
+                  <div
+                    className="absolute text-xs text-neutral-400 pointer-events-none"
+                    style={{
+                      right: 8,
+                      top: `${topPosition}%`,
+                      transform: 'translateY(-50%)',
+                    }}
+                  >
+                    {output.label}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        ) : (
+          // Fallback to single output handle
+          <Handle
+            type="source"
+            position={Position.Right}
+            className="w-3 h-3"
+            style={{
+              right: -6,
+              top: `50%`,
+            }}
+          />
+        )}
       </div>
     </>
   );

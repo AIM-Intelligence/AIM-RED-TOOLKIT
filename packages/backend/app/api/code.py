@@ -1,14 +1,19 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Any, Dict, List
+from pathlib import Path
 from ..core.execute_code import execute_python_code
 from ..core import node_operations
+from ..core.enhanced_flow_executor import EnhancedFlowExecutor
 import os
 
 router = APIRouter()
 
 # Projects root path
 PROJECTS_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "projects")
+
+# Global executor instance for metadata analysis
+metadata_executor = EnhancedFlowExecutor(Path(PROJECTS_ROOT))
 
 class CodeExecutionRequest(BaseModel):
     code: str
@@ -46,6 +51,11 @@ class PackageUninstallRequest(BaseModel):
 
 class GetPackagesRequest(BaseModel):
     project_id: str
+
+class GetNodeMetadataRequest(BaseModel):
+    project_id: str
+    node_id: str
+    node_data: Optional[Dict[str, Any]] = None
 
 @router.post("/execute", response_model=CodeExecutionResponse)
 async def execute_code(request: CodeExecutionRequest):
@@ -235,3 +245,37 @@ async def get_packages(request: GetPackagesRequest):
 async def get_package_info(project_id: str, package: str):
     """Get detailed information about a specific package (not available)"""
     raise HTTPException(status_code=404, detail="Package management is not available in single Python environment mode")
+
+@router.post("/node/metadata")
+async def get_node_metadata(request: GetNodeMetadataRequest):
+    """
+    Get metadata about a node's RunScript function signature.
+    This includes input parameters, output keys, and mode information.
+    """
+    try:
+        # Use the enhanced flow executor to analyze the node
+        metadata = metadata_executor.analyze_node_signature(
+            request.project_id,
+            request.node_id,
+            request.node_data or {"data": {}}
+        )
+        
+        return {
+            "success": True,
+            "project_id": request.project_id,
+            "node_id": request.node_id,
+            "metadata": metadata
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "project_id": request.project_id,
+            "node_id": request.node_id,
+            "error": str(e),
+            "metadata": {
+                "mode": "unknown",
+                "inputs": [],
+                "outputs": [],
+                "error": str(e)
+            }
+        }

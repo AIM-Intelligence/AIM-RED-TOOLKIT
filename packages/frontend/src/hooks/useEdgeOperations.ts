@@ -93,6 +93,8 @@ export function useEdgeOperations({
           edge_type: "custom",
           source: connection.source!,
           target: connection.target!,
+          source_handle: connection.sourceHandle || undefined,
+          target_handle: connection.targetHandle || undefined,
           marker_end: { type: MarkerType.ArrowClosed },
         });
 

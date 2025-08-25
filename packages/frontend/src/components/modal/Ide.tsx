@@ -16,6 +16,8 @@ interface IdeModalProps {
   initialCode?: string;
 }
 
+type NodeMode = "basic" | "script";
+
 const IdeModal: React.FC<IdeModalProps> = ({
   isOpen,
   onClose,
@@ -36,6 +38,33 @@ const IdeModal: React.FC<IdeModalProps> = ({
     "loading"
   );
   const [runResult, setRunResult] = useState<string>("");
+  const [nodeMode, setNodeMode] = useState<NodeMode>("basic");
+  const [nodeMetadata, setNodeMetadata] = useState<any>(null);
+
+  // Fetch metadata to detect mode
+  const fetchMetadata = useCallback(async () => {
+    if (!projectId || !nodeId) return;
+
+    try {
+      const result = await codeApi.getNodeMetadata({
+        project_id: projectId,
+        node_id: nodeId,
+        node_data: { data: { file: `${nodeId}_${nodeTitle.replace(/\s+/g, '_')}.py` } }
+      });
+
+      if (result.success && result.metadata) {
+        setNodeMetadata(result.metadata);
+        // Set mode based on detected function
+        if (result.metadata.mode === "script") {
+          setNodeMode("script");
+        } else {
+          setNodeMode("basic");
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching metadata:", error);
+    }
+  }, [projectId, nodeId]);
 
   // Fetch code from backend when modal opens
   const fetchCode = useCallback(async () => {
@@ -62,6 +91,60 @@ const IdeModal: React.FC<IdeModalProps> = ({
     }
   }, [projectId, nodeId, nodeTitle]);
 
+  // Handle mode change
+  const handleModeChange = useCallback((newMode: NodeMode) => {
+    setNodeMode(newMode);
+    
+    // Generate template based on mode
+    let template = "";
+    if (newMode === "script") {
+      template = `# Python Script Mode - RunScript Pattern
+# Input parameters become input ports
+# Return dict keys become output ports
+
+def RunScript(x: float = 1.0, y: float = 2.0):
+    """
+    Example RunScript function.
+    Parameters define input ports, return dict defines outputs.
+    """
+    
+    # Your logic here
+    result = x + y
+    
+    # Return a dict with output values
+    return {
+        "result": result,
+        "sum": x + y,
+        "product": x * y
+    }
+`;
+    } else {
+      template = `# Basic Mode - Traditional Function
+# Single input_data parameter, return any value
+
+def main(input_data=None):
+    """
+    Basic function that processes input_data.
+    """
+    
+    # Your logic here
+    output_data = input_data
+    
+    return output_data
+`;
+    }
+    
+    // Only replace if current code is empty or default
+    const currentCode = editorRef.current?.getValue() || code;
+    if (currentCode.includes("def foo()") || currentCode.trim() === "" || 
+        currentCode.includes("# Write your Python function here")) {
+      setCode(template);
+      if (editorRef.current) {
+        editorRef.current.setValue(template);
+      }
+    }
+  }, [code]);
+
   const handleSave = useCallback(async () => {
     if (!editorRef.current) return;
 
@@ -80,6 +163,39 @@ const IdeModal: React.FC<IdeModalProps> = ({
       if (data.success) {
         setSaveStatus("success");
         setCode(currentCode);
+        
+        // Fetch updated metadata after saving
+        try {
+          const metadataResult = await codeApi.getNodeMetadata({
+            project_id: projectId,
+            node_id: nodeId,
+            node_data: { data: { file: `${nodeId}_${nodeTitle.replace(/\s+/g, '_')}.py` } }
+          });
+          
+          if (metadataResult.success && metadataResult.metadata) {
+            setNodeMetadata(metadataResult.metadata);
+            // Update mode based on detected function
+            if (metadataResult.metadata.mode === "script") {
+              setNodeMode("script");
+            } else {
+              setNodeMode("basic");
+            }
+            
+            // Emit custom event to update node ports in the flow
+            const updateEvent = new CustomEvent("updateNodePorts", {
+              detail: {
+                nodeId: nodeId,
+                metadata: metadataResult.metadata
+              },
+              bubbles: true,
+            });
+            console.log("Dispatching updateNodePorts event:", updateEvent.detail);
+            window.dispatchEvent(updateEvent);
+          }
+        } catch (metadataError) {
+          console.error("Error fetching metadata after save:", metadataError);
+        }
+        
         setTimeout(() => setSaveModalOpen(false), 1500);
       } else {
         setSaveStatus("error");
@@ -127,12 +243,13 @@ const IdeModal: React.FC<IdeModalProps> = ({
     }
   }, [projectId, nodeId, nodeTitle]);
 
-  // Fetch code when modal opens
+  // Fetch code and metadata when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchCode();
+      fetchMetadata();
     }
-  }, [isOpen, nodeId, fetchCode]);
+  }, [isOpen, nodeId, fetchCode, fetchMetadata]);
 
   useEffect(() => {
     if (isOpen) {
@@ -255,12 +372,51 @@ const IdeModal: React.FC<IdeModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-4 border-b border-neutral-700">
-          <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-            Python IDE - {nodeTitle}
-            {isLoadingCode && (
-              <span className="text-sm text-neutral-400">(Loading...)</span>
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+              Python IDE - {nodeTitle}
+              {isLoadingCode && (
+                <span className="text-sm text-neutral-400">(Loading...)</span>
+              )}
+            </h2>
+            
+            {/* Mode Toggle */}
+            <div className="flex items-center gap-2 bg-neutral-800 rounded-lg p-1">
+              <button
+                onClick={() => handleModeChange("basic")}
+                className={`px-3 py-1 rounded transition-colors text-sm font-medium ${
+                  nodeMode === "basic"
+                    ? "bg-neutral-700 text-white"
+                    : "text-neutral-400 hover:text-white"
+                }`}
+                title="Basic Mode: Single function with input_data parameter"
+              >
+                Basic Mode
+              </button>
+              <button
+                onClick={() => handleModeChange("script")}
+                className={`px-3 py-1 rounded transition-colors text-sm font-medium ${
+                  nodeMode === "script"
+                    ? "bg-neutral-700 text-white"
+                    : "text-neutral-400 hover:text-white"
+                }`}
+                title="Script Mode: RunScript pattern with typed parameters"
+              >
+                Script Mode
+              </button>
+            </div>
+            
+            {/* Mode Info */}
+            {nodeMetadata && (
+              <div className="text-xs text-neutral-500">
+                {nodeMetadata.function_name ? (
+                  <span>Detected: {nodeMetadata.function_name}()</span>
+                ) : (
+                  <span>No function detected</span>
+                )}
+              </div>
             )}
-          </h2>
+          </div>
           <X onClose={onClose} />
         </div>
 

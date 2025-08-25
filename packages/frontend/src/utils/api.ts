@@ -227,6 +227,38 @@ export const codeApi = {
     });
   },
 
+  // Get node metadata (RunScript signature)
+  async getNodeMetadata(data: {
+    project_id: string;
+    node_id: string;
+    node_data?: Record<string, unknown>;
+  }): Promise<{
+    success: boolean;
+    project_id: string;
+    node_id: string;
+    metadata: {
+      mode: "script" | "basic" | "unknown";
+      inputs: Array<{
+        name: string;
+        type: string;
+        default?: unknown;
+        required?: boolean;
+      }>;
+      outputs: Array<{
+        name: string;
+        type: string;
+      }>;
+      function_name?: string;
+      error?: string;
+    };
+    error?: string;
+  }> {
+    return apiCall("/code/node/metadata", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
 };
 
 // Export all API functions

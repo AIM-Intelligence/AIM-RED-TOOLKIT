@@ -9,10 +9,22 @@ export interface Position {
   y: number;
 }
 
+export interface PortInfo {
+  id: string;        // Port ID (parameter name)
+  label: string;     // Display label
+  type: string;      // Data type (float, int, str, etc.)
+  required: boolean; // Whether required
+  default?: any;     // Default value
+}
+
 export interface NodeData {
   title: string;
   description?: string;
   file?: string;
+  mode?: "basic" | "script";  // Node mode
+  inputs?: PortInfo[];         // Input ports
+  outputs?: PortInfo[];        // Output ports
+  viewCode?: () => void;       // Handler for view code button
 }
 
 export interface EdgeMarkerEnd {
@@ -183,6 +195,8 @@ export interface CreateEdgeRequest {
   edge_type?: string; // Default: "bezier"
   source: string;
   target: string;
+  source_handle?: string;
+  target_handle?: string;
   marker_end?: EdgeMarkerEnd;
 }
 

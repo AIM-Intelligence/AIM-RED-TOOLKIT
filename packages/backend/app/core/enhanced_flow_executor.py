@@ -8,9 +8,11 @@ import sys
 import time
 import inspect
 import traceback
-from typing import Any, Dict, Optional, List, Set, Tuple
+import asyncio
+from typing import Any, Dict, Optional, List, Set, Tuple, get_type_hints, get_origin, get_args
 from pathlib import Path
 from collections import defaultdict, deque
+import ast
 
 from .flow_executor import FlowExecutor
 from .execute_code import execute_python_code
@@ -31,6 +33,7 @@ class EnhancedFlowExecutor(FlowExecutor):
         node_data: Dict,
         input_data: Any,
         timeout: int = 30,
+        target_handles: Optional[Dict[str, str]] = None  # Map of source_id -> target_handle
     ) -> Dict[str, Any]:
         """Execute node in the same process to enable object passing"""
         
@@ -63,12 +66,31 @@ class EnhancedFlowExecutor(FlowExecutor):
             # 1. Unwrap input data (convert references to actual objects)
             actual_input = self._unwrap_input(project_id, input_data)
             
-            # 2. Execute node code in the same process
+            # 2. If we have target handle information, restructure input for RunScript
+            if target_handles and isinstance(actual_input, dict):
+                # Check if this is a multi-input scenario
+                restructured_input = {}
+                for source_id, value in actual_input.items():
+                    if source_id in target_handles:
+                        # Use the target handle as the parameter name
+                        handle_name = target_handles[source_id]
+                        restructured_input[handle_name] = value
+                    else:
+                        # Keep original key if no handle mapping
+                        restructured_input[source_id] = value
+                actual_input = restructured_input
+            elif target_handles and len(target_handles) == 1:
+                # Single input with target handle - wrap in dict with handle name
+                handle_name = list(target_handles.values())[0]
+                if handle_name:
+                    actual_input = {handle_name: actual_input}
+            
+            # 3. Execute node code in the same process
             result = self._execute_in_process(
                 project_id, node_id, node_data, actual_input
             )
             
-            # 3. Wrap output (store objects and return references if needed)
+            # 4. Wrap output (store objects and return references if needed)
             wrapped_output = self._wrap_output(project_id, node_id, result)
             
             execution_time_ms = round((time.time() - start_time) * 1000)
@@ -190,17 +212,44 @@ class EnhancedFlowExecutor(FlowExecutor):
         return namespace
     
     def _call_function_with_input(self, func: callable, input_data: Any) -> Any:
-        """Call a function with appropriate input handling"""
+        """Call a function with appropriate input handling for RunScript pattern"""
         
         try:
             sig = inspect.signature(func)
             params = list(sig.parameters.keys())
             
-            # No parameters
+            # No parameters - call without arguments
             if len(params) == 0:
                 return func()
             
-            # If input is a dict and function expects named parameters
+            # Special handling for RunScript pattern
+            if func.__name__ == "RunScript":
+                # RunScript always uses keyword arguments from input_data dict
+                if isinstance(input_data, dict):
+                    # Build kwargs mapping input_data keys to function parameters
+                    kwargs = {}
+                    for param_name, param in sig.parameters.items():
+                        if param_name in input_data:
+                            # Use value from input_data
+                            kwargs[param_name] = input_data[param_name]
+                        elif param.default is not inspect.Parameter.empty:
+                            # Parameter has default, will use it
+                            pass
+                        else:
+                            # Required parameter missing - skip it to use Python's default behavior
+                            pass
+                    
+                    return func(**kwargs)
+                else:
+                    # If input is not a dict, try to pass as first parameter only
+                    first_param = params[0] if params else None
+                    if first_param:
+                        return func(**{first_param: input_data})
+                    else:
+                        return func()
+            
+            # For non-RunScript functions, use original logic
+            # If input is a dict and function expects multiple parameters
             if isinstance(input_data, dict) and len(params) > 1:
                 # Try to map dict keys to function parameters
                 kwargs = {}
@@ -221,10 +270,27 @@ class EnhancedFlowExecutor(FlowExecutor):
             else:
                 return func()
                 
-        except Exception:
+        except TypeError as e:
+            # Handle parameter mismatch errors
+            if "missing" in str(e) and "required positional argument" in str(e):
+                # Try calling with no arguments if it's expecting nothing
+                try:
+                    return func()
+                except:
+                    pass
+            
             # Fallback: try calling with input_data or without
             if input_data is not None:
                 return func(input_data)
+            else:
+                return func()
+        except Exception:
+            # Final fallback
+            if input_data is not None:
+                try:
+                    return func(input_data)
+                except:
+                    return func()
             else:
                 return func()
     
@@ -363,6 +429,232 @@ class EnhancedFlowExecutor(FlowExecutor):
             self.object_stores[project_id].clear()
             del self.object_stores[project_id]
     
+    def _extract_reachable_subgraph(
+        self, start_id: str, nodes: Dict[str, Dict], edges: List[Dict]
+    ) -> Tuple[Set[str], Dict[str, List[Tuple[str, Optional[str]]]]]:
+        """Extract nodes reachable from start node, including nodes that provide inputs"""
+        # Build adjacency list
+        adjacency = defaultdict(list)
+        reverse_adjacency = defaultdict(set)  # Track who provides input to whom
+        
+        for edge in edges:
+            source = edge.get("source")
+            target = edge.get("target")
+            param = edge.get("data", {}).get("param") if edge.get("data") else None
+
+            if source in nodes and target in nodes:
+                adjacency[source].append((target, param))
+                reverse_adjacency[target].add(source)
+
+        # BFS to find reachable nodes from start
+        reachable = set()
+        queue = deque([start_id])
+
+        while queue:
+            current = queue.popleft()
+            if current in reachable:
+                continue
+            reachable.add(current)
+
+            # Add all nodes that current node connects to
+            for target, _ in adjacency[current]:
+                if target not in reachable:
+                    queue.append(target)
+            
+            # IMPORTANT: Also add nodes that provide input to the current node
+            # This ensures nodes like 7 and 8 that feed into node 6 are included
+            for source in reverse_adjacency[current]:
+                if source not in reachable:
+                    queue.append(source)
+
+        return reachable, adjacency
+    
+    async def execute_flow(
+        self,
+        project_id: str,
+        start_node_id: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
+        max_workers: int = 4,
+        timeout_sec: int = 30,
+        halt_on_error: bool = True,
+    ) -> Dict[str, Any]:
+        """Execute the complete flow with targetHandle support"""
+        
+        # Load project structure
+        nodes, edges = self._load_structure(project_id)
+        
+        # Find start node
+        if not start_node_id:
+            start_node_id = self._find_start_node(nodes)
+            if not start_node_id:
+                raise ValueError("No start node found in project")
+        
+        if start_node_id not in nodes:
+            raise ValueError(f"Start node {start_node_id} not found")
+        
+        # Extract reachable subgraph
+        reachable_nodes, adjacency = self._extract_reachable_subgraph(
+            start_node_id, nodes, edges
+        )
+        
+        # Perform topological sort
+        execution_order = self._topological_sort(reachable_nodes, adjacency)
+        
+        # Initialize execution state
+        execution_results = {}
+        node_outputs = {}
+        node_inputs = defaultdict(dict)
+        
+        # Calculate dependencies
+        dependencies = defaultdict(set)
+        for edge in edges:
+            if edge["source"] in reachable_nodes and edge["target"] in reachable_nodes:
+                dependencies[edge["target"]].add(edge["source"])
+        
+        # Set initial params for start node
+        if params:
+            node_inputs[start_node_id] = params
+        
+        # Execution semaphore for parallel control
+        semaphore = asyncio.Semaphore(max_workers)
+        
+        async def execute_node_async(node_id: str):
+            """Execute a single node asynchronously"""
+            async with semaphore:
+                # Check if all dependencies are satisfied
+                for dep in dependencies[node_id]:
+                    if dep not in execution_results:
+                        return  # Dependencies not ready
+                    if halt_on_error and execution_results[dep]["status"] == "error":
+                        execution_results[node_id] = {
+                            "status": "skipped",
+                            "error": f"Skipped due to error in dependency {dep}",
+                            "execution_time_ms": 0,
+                            "logs": "",
+                        }
+                        return
+                
+                # Prepare input data with targetHandle mapping
+                input_data = None
+                target_handles = {}
+                
+                # Collect inputs from edges with handle information
+                incoming_edges = [
+                    {
+                        "source": edge["source"],
+                        "targetHandle": edge.get("targetHandle"),
+                        "sourceHandle": edge.get("sourceHandle")
+                    }
+                    for edge in edges
+                    if edge["target"] == node_id and edge["source"] in node_outputs
+                ]
+                
+                if incoming_edges:
+                    if len(incoming_edges) == 1:
+                        # Single input
+                        edge_info = incoming_edges[0]
+                        source = edge_info["source"]
+                        source_output = node_outputs[source]
+                        
+                        # Extract value based on sourceHandle
+                        value = source_output
+                        if isinstance(source_output, dict) and edge_info["sourceHandle"]:
+                            # Extract specific output from dict
+                            if edge_info["sourceHandle"] in source_output:
+                                value = source_output[edge_info["sourceHandle"]]
+                        
+                        # If targetHandle is specified, wrap in dict with handle as key
+                        if edge_info["targetHandle"]:
+                            input_data = {edge_info["targetHandle"]: value}
+                            target_handles[source] = edge_info["targetHandle"]
+                        else:
+                            input_data = value
+                    else:
+                        # Multiple inputs - create dict with targetHandle as keys
+                        input_data = {}
+                        for edge_info in incoming_edges:
+                            source = edge_info["source"]
+                            source_output = node_outputs[source]
+                            
+                            # Extract specific output if sourceHandle is specified
+                            if isinstance(source_output, dict) and edge_info["sourceHandle"]:
+                                if edge_info["sourceHandle"] in source_output:
+                                    value = source_output[edge_info["sourceHandle"]]
+                                else:
+                                    value = source_output
+                            else:
+                                value = source_output
+                            
+                            # Use targetHandle as key if specified
+                            if edge_info["targetHandle"]:
+                                input_data[edge_info["targetHandle"]] = value
+                                target_handles[source] = edge_info["targetHandle"]
+                            else:
+                                input_data[f"input_{source}"] = value
+                elif node_id == start_node_id and params:
+                    # Start node with initial params
+                    input_data = params
+                
+                # Execute node in thread pool (blocking operation)
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    None,
+                    self._execute_node_isolated,
+                    project_id,
+                    node_id,
+                    nodes[node_id],
+                    input_data,
+                    timeout_sec,
+                    target_handles if target_handles else None,
+                )
+                
+                execution_results[node_id] = result
+                
+                # Store output for downstream nodes
+                if result["status"] == "success":
+                    node_outputs[node_id] = result.get("output")
+        
+        # Execute nodes in order with parallelization
+        executed = set()
+        
+        while len(executed) < len(execution_order):
+            # Find nodes ready to execute
+            ready = []
+            for node_id in execution_order:
+                if node_id not in executed:
+                    # Check if all dependencies are executed
+                    if all(dep in executed for dep in dependencies[node_id]):
+                        ready.append(node_id)
+            
+            # Execute ready nodes in parallel
+            if ready:
+                tasks = [execute_node_async(node_id) for node_id in ready]
+                await asyncio.gather(*tasks)
+                executed.update(ready)
+            else:
+                # No progress possible - might have cycle or error
+                break
+        
+        # Collect results from result nodes
+        result_nodes = {}
+        for node_id in execution_results:
+            if nodes[node_id].get("type") == "result":
+                if execution_results[node_id]["status"] == "success":
+                    result_nodes[node_id] = execution_results[node_id]["output"]
+        
+        return {
+            "success": True,
+            "run_id": f"{time.strftime('%Y-%m-%dT%H:%M:%SZ')}-{project_id}",
+            "execution_results": execution_results,
+            "result_nodes": result_nodes,
+            "execution_order": execution_order,
+            "total_execution_time_ms": sum(
+                r.get("execution_time_ms", 0)
+                for r in execution_results.values()
+                if r.get("status") == "success"
+            ),
+        }
+    
     def get_store_info(self, project_id: str) -> Dict:
         """Get information about the object store for debugging"""
         
@@ -382,3 +674,220 @@ class EnhancedFlowExecutor(FlowExecutor):
                 for ref, obj in store.items()
             ]
         }
+    
+    def analyze_node_signature(self, project_id: str, node_id: str, node_data: Dict) -> Dict:
+        """Analyze a node's RunScript function signature for metadata"""
+        
+        try:
+            # Get node file path
+            file_name = node_data.get("data", {}).get("file")
+            if not file_name:
+                title = node_data.get("data", {}).get("title", f"Node_{node_id}")
+                sanitized_title = "".join(
+                    c if c.isalnum() or c == "_" else "_" for c in title
+                )
+                file_name = f"{node_id}_{sanitized_title}.py"
+            
+            file_path = self.projects_root / project_id / file_name
+            
+            if not file_path.exists():
+                return {
+                    "mode": "unknown",
+                    "inputs": [],
+                    "outputs": [],
+                    "error": f"Node file '{file_name}' not found"
+                }
+            
+            # Read and parse the node code
+            with open(file_path, 'r', encoding='utf-8') as f:
+                node_code = f.read()
+            
+            # Parse the AST to find RunScript function
+            try:
+                tree = ast.parse(node_code)
+            except SyntaxError as e:
+                return {
+                    "mode": "unknown",
+                    "inputs": [],
+                    "outputs": [],
+                    "error": f"Syntax error in node code: {e}"
+                }
+            
+            # Find RunScript function
+            runscript_node = None
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef) and node.name == "RunScript":
+                    runscript_node = node
+                    break
+            
+            # Determine mode and extract metadata
+            if runscript_node:
+                # Python Script Mode - has RunScript function
+                inputs = self._extract_function_inputs(runscript_node, node_code)
+                outputs = self._extract_function_outputs(runscript_node, node_code)
+                
+                return {
+                    "mode": "script",
+                    "inputs": inputs,
+                    "outputs": outputs,
+                    "function_name": "RunScript"
+                }
+            else:
+                # Check for main function as fallback
+                main_node = None
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.FunctionDef) and node.name == "main":
+                        main_node = node
+                        break
+                
+                if main_node:
+                    inputs = self._extract_function_inputs(main_node, node_code)
+                    outputs = self._extract_function_outputs(main_node, node_code)
+                    
+                    return {
+                        "mode": "basic",
+                        "inputs": inputs,
+                        "outputs": outputs,
+                        "function_name": "main"
+                    }
+                else:
+                    # No RunScript or main - basic mode
+                    return {
+                        "mode": "basic",
+                        "inputs": [{"name": "input_data", "type": "Any", "default": None}],
+                        "outputs": [{"name": "output", "type": "Any"}],
+                        "function_name": None
+                    }
+                    
+        except Exception as e:
+            return {
+                "mode": "unknown",
+                "inputs": [],
+                "outputs": [],
+                "error": str(e)
+            }
+    
+    def _extract_function_inputs(self, func_node: ast.FunctionDef, source_code: str) -> List[Dict]:
+        """Extract input parameters from a function AST node"""
+        
+        inputs = []
+        args = func_node.args
+        
+        # Get default values (they're aligned to the right)
+        defaults = args.defaults or []
+        num_args = len(args.args)
+        num_defaults = len(defaults)
+        
+        for i, arg in enumerate(args.args):
+            param_info = {
+                "name": arg.arg,
+                "type": "Any",  # Default type
+                "default": None,
+                "required": True
+            }
+            
+            # Check if this parameter has a default value
+            default_index = i - (num_args - num_defaults)
+            if default_index >= 0:
+                default_node = defaults[default_index]
+                param_info["required"] = False
+                param_info["default"] = self._extract_default_value(default_node)
+            
+            # Extract type annotation if available
+            if arg.annotation:
+                param_info["type"] = self._extract_type_annotation(arg.annotation)
+            
+            inputs.append(param_info)
+        
+        return inputs
+    
+    def _extract_function_outputs(self, func_node: ast.FunctionDef, source_code: str) -> List[Dict]:
+        """Extract output keys from return statements in function"""
+        
+        outputs = []
+        
+        # Find all return statements
+        for node in ast.walk(func_node):
+            if isinstance(node, ast.Return) and node.value:
+                # Check if return value is a dict literal
+                if isinstance(node.value, ast.Dict):
+                    for key in node.value.keys:
+                        if isinstance(key, ast.Constant):
+                            output_name = key.value
+                            if output_name not in [o["name"] for o in outputs]:
+                                outputs.append({
+                                    "name": output_name,
+                                    "type": "Any"
+                                })
+                # Check if return value is a dict() call
+                elif isinstance(node.value, ast.Call):
+                    if isinstance(node.value.func, ast.Name) and node.value.func.id == "dict":
+                        # Extract keys from dict(key=value) syntax
+                        for keyword in node.value.keywords:
+                            if keyword.arg:
+                                if keyword.arg not in [o["name"] for o in outputs]:
+                                    outputs.append({
+                                        "name": keyword.arg,
+                                        "type": "Any"
+                                    })
+        
+        # If no outputs found, assume single output
+        if not outputs:
+            outputs = [{"name": "output", "type": "Any"}]
+        
+        return outputs
+    
+    def _extract_type_annotation(self, annotation_node) -> str:
+        """Extract type annotation as string"""
+        
+        if isinstance(annotation_node, ast.Name):
+            return annotation_node.id
+        elif isinstance(annotation_node, ast.Constant):
+            return str(annotation_node.value)
+        elif isinstance(annotation_node, ast.Subscript):
+            # Handle Generic types like List[int], Optional[str], Literal["a","b"]
+            base = self._extract_type_annotation(annotation_node.value)
+            
+            # Special handling for Literal
+            if base == "Literal":
+                if isinstance(annotation_node.slice, ast.Tuple):
+                    values = []
+                    for elt in annotation_node.slice.elts:
+                        if isinstance(elt, ast.Constant):
+                            values.append(elt.value)
+                    return f"Literal{values}"
+                elif isinstance(annotation_node.slice, ast.Constant):
+                    return f"Literal[{annotation_node.slice.value}]"
+            
+            # Handle other generic types
+            if isinstance(annotation_node.slice, ast.Name):
+                return f"{base}[{annotation_node.slice.id}]"
+            elif isinstance(annotation_node.slice, ast.Constant):
+                return f"{base}[{annotation_node.slice.value}]"
+            else:
+                return base
+        else:
+            return "Any"
+    
+    def _extract_default_value(self, default_node):
+        """Extract default value from AST node"""
+        
+        if isinstance(default_node, ast.Constant):
+            return default_node.value
+        elif isinstance(default_node, ast.Name):
+            # Handle True, False, None
+            if default_node.id in ["True", "False", "None"]:
+                return {"True": True, "False": False, "None": None}[default_node.id]
+            return default_node.id
+        elif isinstance(default_node, ast.UnaryOp) and isinstance(default_node.op, ast.USub):
+            # Handle negative numbers
+            if isinstance(default_node.operand, ast.Constant):
+                return -default_node.operand.value
+        elif isinstance(default_node, ast.List):
+            return []
+        elif isinstance(default_node, ast.Dict):
+            return {}
+        elif isinstance(default_node, ast.Tuple):
+            return ()
+        
+        return None

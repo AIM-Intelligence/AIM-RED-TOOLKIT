@@ -61,6 +61,54 @@ export function useNodeOperations({
     setEdges(initialEdges);
   }, [initialEdges, setEdges]);
 
+  // Listen for node port updates
+  useEffect(() => {
+    const handleUpdateNodePorts = (event: CustomEvent) => {
+      const { nodeId, metadata } = event.detail;
+      console.log("Received updateNodePorts event:", { nodeId, metadata });
+      
+      setNodes((currentNodes) => 
+        currentNodes.map((node) => {
+          if (node.id === nodeId) {
+            console.log(`Updating node ${nodeId} with metadata:`, metadata);
+            // Convert metadata inputs/outputs to PortInfo format
+            const inputs = metadata.inputs?.map((input: any) => ({
+              id: input.name,
+              label: input.name,
+              type: input.type,
+              required: input.required !== false,
+              default: input.default,
+            }));
+            
+            const outputs = metadata.outputs?.map((output: any) => ({
+              id: output.name,
+              label: output.name,
+              type: output.type,
+              required: false,
+              default: undefined,
+            }));
+            
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                mode: metadata.mode,
+                inputs: inputs,
+                outputs: outputs,
+              },
+            };
+          }
+          return node;
+        })
+      );
+    };
+
+    window.addEventListener("updateNodePorts" as any, handleUpdateNodePorts);
+    return () => {
+      window.removeEventListener("updateNodePorts" as any, handleUpdateNodePorts);
+    };
+  }, [setNodes]);
+
   // Custom handler for node changes that persists position updates
   const onNodesChange = useCallback<OnNodesChange<AnyNodeType>>(
     (changes: NodeChange<AnyNodeType>[]) => {
