@@ -52,6 +52,17 @@ export async function initializeMonacoServices(): Promise<void> {
         ...getThemeServiceOverride(),
         ...getTextmateServiceOverride(),
         ...getLanguagesServiceOverride(),
+      }, undefined, {
+        // Additional configuration for better LSP support
+        workspaceProvider: {
+          trusted: true,
+          workspace: {
+            workspaceUri: monaco.Uri.file('/app/projects')
+          },
+          async open() {
+            return true;
+          }
+        }
       });
       console.log('[Monaco] VSCode API services initialized');
 

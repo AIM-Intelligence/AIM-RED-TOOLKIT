@@ -5,6 +5,7 @@ Provides interactive shell with per-project virtual environment
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, HTTPException
 import os
+import sys
 import pty
 import termios
 import fcntl
@@ -18,7 +19,6 @@ import time
 from pathlib import Path
 from typing import Optional, Dict, Any
 from ..core.logging import get_logger
-from ..core.venv_manager import VenvManager
 
 router = APIRouter()
 log = get_logger(__name__)
@@ -54,8 +54,6 @@ class TerminalSession:
 def _project_paths(project_id: str) -> tuple[Path, Path]:
     """Get project root and venv paths"""
     root = Path("/app/projects") / project_id
-    if not root.exists():
-        root = Path("packages/backend/projects") / project_id  # Fallback for local dev
     venv = root / "venv"
     return root, venv
 
@@ -102,14 +100,9 @@ async def terminal_ws(
         # Get project paths
         project_root, venv = _project_paths(project_id)
         
-        # Ensure project and venv exist
+        # Ensure project directory exists (create if not)
         if not project_root.exists():
-            await ws.send_text(json.dumps({
-                "type": "error",
-                "message": f"Project {project_id} not found"
-            }))
-            await ws.close()
-            return
+            project_root.mkdir(parents=True, exist_ok=True)
             
         if not venv.exists():
             # Virtual environment should exist already (created with project)
@@ -127,14 +120,28 @@ async def terminal_ws(
         env = _build_env(os.environ.copy(), venv, project_root)
         
         # Fork a PTY
-        pid, master_fd = pty.fork()
+        try:
+            pid, master_fd = pty.fork()
+        except OSError as e:
+            log.error(f"Failed to fork PTY: {e}")
+            await ws.send_text(json.dumps({
+                "type": "error",
+                "message": f"Failed to create terminal: {e}"
+            }))
+            await ws.close()
+            return
         
         if pid == 0:
             # Child process - exec the shell
-            os.chdir(str(project_root))
-            os.execve(shell, [shell, "-l"], env)  # -l for login shell
+            try:
+                os.chdir(str(project_root))
+                os.execve(shell, [shell, "-l"], env)  # -l for login shell
+            except Exception as e:
+                # Log error and exit
+                print(f"Failed to exec shell: {e}", file=sys.stderr)
+                os._exit(1)
             # Should never reach here
-            raise SystemExit(1)
+            os._exit(1)
         
         # Parent process - manage the PTY
         session.pid = pid
@@ -297,7 +304,8 @@ async def terminal_ws(
             pass
         
     except Exception as e:
-        log.error(f"Terminal session error for {project_id}: {e}")
+        import traceback
+        log.error(f"Terminal session error for {project_id}: {e}\n{traceback.format_exc()}")
         try:
             await ws.send_text(json.dumps({
                 "type": "error",

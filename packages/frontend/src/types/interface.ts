@@ -38,6 +38,7 @@ export interface CodeExecutionRequest {
   code: string;
   language?: string; // Default: "python"
   timeout?: number; // Default: 30 seconds
+  project_id?: string; // Optional: uses project venv if provided
 }
 
 export interface CodeExecutionResponse {
@@ -231,29 +232,6 @@ export interface ExecuteFlowResponse {
   total_execution_time_ms: number;
 }
 
-// Analyze Flow Request
-export interface AnalyzeFlowRequest {
-  project_id: string;
-}
-
-// Analyze Flow Response
-export interface AnalyzeFlowResponse {
-  success: boolean;
-  project_id: string;
-  analysis: {
-    total_nodes: number;
-    total_edges: number;
-    start_nodes: string[];
-    result_nodes: string[];
-    has_cycles: boolean;
-    unreachable_nodes: string[];
-    reachable_from_starts?: Record<string, string[]>;
-    suggested_execution_order?: string[];
-    parallel_execution_groups?: string[][];
-    is_valid: boolean;
-    validation_errors: string[];
-  };
-}
 
 // ==================== Error Response ====================
 

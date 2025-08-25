@@ -7,8 +7,8 @@ from ..core import (
     node_operations,
     edge_operations
 )
-from ..core.flow_executor import FlowExecutor
-from ..core.flow_analyzer import FlowAnalyzer
+from pathlib import Path
+import os
 
 router = APIRouter()
 
@@ -58,8 +58,6 @@ class ExecuteFlowRequest(BaseModel):
     timeout_sec: int = Field(default=30, ge=1, le=300)
     halt_on_error: bool = True
 
-class AnalyzeFlowRequest(BaseModel):
-    project_id: str
 
 
 
@@ -143,9 +141,9 @@ async def get_project(project_id: str):
 
 @router.post("/make")
 async def make_project(request: CreateProjectRequest):
-    """Create a new project with folder and json file"""
+    """Create a new project with folder and json file, start async venv creation"""
     try:
-        result = project_operations.create_project(request.project_name, request.project_description, request.project_id)
+        result = await project_operations.create_project(request.project_name, request.project_description, request.project_id)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -153,11 +151,25 @@ async def make_project(request: CreateProjectRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{project_id}/venv-status")
+async def get_venv_status(project_id: str):
+    """Check virtual environment status including creation progress"""
+    try:
+        # Get detailed venv status from operations (now async)
+        status = await project_operations.get_venv_status(project_id)
+        return status
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+
 @router.delete("/delete")
 async def delete_project(request: DeleteProjectRequest):
     """Delete entire project folder"""
     try:
-        result = project_operations.delete_project(request.project_name, request.project_id)
+        result = await project_operations.delete_project(request.project_name, request.project_id)
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -244,60 +256,28 @@ async def delete_edge(request: DeleteEdgeRequest):
 
 @router.post("/execute-flow")
 async def execute_flow(request: ExecuteFlowRequest):
-    """Execute the node flow starting from start node"""
+    """Execute the node flow starting from start node - proxy to executor"""
     try:
-        # Initialize flow executor
-        import os
-        projects_root = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "projects"
-        )
-        executor = FlowExecutor(projects_root)
+        from ..api.executor_proxy import proxy_to_executor
         
-        # Execute the flow
-        result = await executor.execute_flow(
-            project_id=request.project_id,
-            start_node_id=request.start_node_id,
-            params=request.params,
-            max_workers=request.max_workers,
-            timeout_sec=request.timeout_sec,
-            halt_on_error=request.halt_on_error
+        # Proxy the execution request to executor
+        result = await proxy_to_executor(
+            "execute/flow",
+            json_data={
+                "project_id": request.project_id,
+                "start_node_id": request.start_node_id,
+                "params": request.params,
+                "max_workers": request.max_workers,
+                "timeout_sec": request.timeout_sec,
+                "halt_on_error": request.halt_on_error
+            }
         )
         
         return result
         
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Flow execution failed: {str(e)}")
 
 
-@router.post("/analyze-flow")
-async def analyze_flow(request: AnalyzeFlowRequest):
-    """Analyze the flow structure for validation and optimization"""
-    try:
-        # Get project structure
-        structure = project_structure.get_project_structure(request.project_id)
-        nodes = structure.get('nodes', [])
-        edges = structure.get('edges', [])
-        
-        # Perform analysis
-        analysis = FlowAnalyzer.analyze_flow_structure(nodes, edges)
-        
-        # Validate flow
-        is_valid, errors = FlowAnalyzer.validate_flow(nodes, edges)
-        analysis['is_valid'] = is_valid
-        analysis['validation_errors'] = errors
-        
-        return {
-            "success": True,
-            "project_id": request.project_id,
-            "analysis": analysis
-        }
-        
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Flow analysis failed: {str(e)}")

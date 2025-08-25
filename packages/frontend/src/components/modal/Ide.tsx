@@ -47,34 +47,29 @@ const IdeModal: React.FC<IdeModalProps> = ({
     null
   );
   const [isLspConnecting, setIsLspConnecting] = useState(false);
+  const [venvStatus, setVenvStatus] = useState<
+    "checking" | "creating" | "ready" | "error"
+  >("checking");
+  const [venvProgress, setVenvProgress] = useState<{
+    progress?: number;
+    message?: string;
+    current_package?: string | null;
+  }>({
+    progress: 0,
+    message: "",
+    current_package: null
+  });
   const modelRef = useRef<Monaco.editor.ITextModel | null>(null);
   const [showTerminal, setShowTerminal] = useState(false);
 
-  // Fetch installed packages
-  const fetchPackages = useCallback(async () => {
-    if (!projectId) return;
-
-    try {
-      const data = await codeApi.getPackages({ project_id: projectId });
-      if (data.success) {
-        console.log(`${data.packages} Installed`);
-      }
-    } catch (error) {
-      console.error("Error fetching packages:", error);
-    }
-  }, [projectId]);
-
   // Handle package changes from terminal
   const handleTerminalPackageChanged = useCallback(async () => {
-    // Refresh package list
-    await fetchPackages();
-
     // Restart LSP to pick up changes
     if (lspConnection) {
       console.log("Restarting LSP after terminal package change");
       await lspConnection.restart();
     }
-  }, [fetchPackages, lspConnection]);
+  }, [lspConnection]);
 
   // Fetch code from backend when modal opens
   const fetchCode = useCallback(async () => {
@@ -90,9 +85,15 @@ const IdeModal: React.FC<IdeModalProps> = ({
 
       if (data.success && data.code) {
         setCode(data.code);
+        // Only update model if it exists, otherwise the code will be used when model is created
         if (editorRef.current && modelRef.current) {
-          // Update model value directly instead of setValue on editor
-          modelRef.current.setValue(data.code);
+          try {
+            // Update model value directly instead of setValue on editor
+            modelRef.current.setValue(data.code);
+          } catch (error) {
+            console.error("Error updating model value:", error);
+            // Fallback: just update the state, it will be used when editor mounts
+          }
         }
       }
     } catch (error) {
@@ -173,39 +174,164 @@ const IdeModal: React.FC<IdeModalProps> = ({
     initializeMonacoServices().catch(console.error);
   }, []);
 
-  // Connect to LSP when modal opens
+  // Check venv status only when modal opens
   useEffect(() => {
-    if (isOpen && projectId && !lspConnection && !isLspConnecting) {
-      setIsLspConnecting(true);
-      pythonLspClient
-        .connect(projectId)
-        .then((connection) => {
-          setLspConnection(connection);
-          console.log("LSP connected successfully");
-        })
-        .catch((error) => {
-          console.error("Failed to connect to LSP:", error);
-        })
-        .finally(() => {
-          setIsLspConnecting(false);
-        });
+    let retryTimeout: NodeJS.Timeout | null = null;
+    let isCancelled = false;
+
+    const checkVenvStatus = async () => {
+      if (!isOpen || !projectId || isCancelled) return;
+      
+      try {
+        setVenvStatus("checking");
+        const { projectApi } = await import("../../utils/api");
+        const venvStatusResult = await projectApi.getVenvStatus(projectId);
+
+        if (isCancelled) return;
+
+        console.log("Venv status check result:", venvStatusResult);
+
+        // Update progress information
+        if (venvStatusResult.progress !== undefined) {
+          setVenvProgress({
+            progress: venvStatusResult.progress || 0,
+            message: venvStatusResult.message || "",
+            current_package: venvStatusResult.current_package || null,
+          });
+        }
+
+        if (!venvStatusResult.venv_ready) {
+          // Check the detailed status
+          if (venvStatusResult.status === "not_started") {
+            console.log("Virtual environment not started, initiating creation...");
+            setVenvStatus("creating");
+            
+            // Start venv creation
+            try {
+              const createResult = await projectApi.createVenv(projectId);
+              console.log("Venv creation initiated:", createResult);
+              
+              // Poll for status after starting creation
+              if (!isCancelled) {
+                retryTimeout = setTimeout(() => {
+                  checkVenvStatus();
+                }, 2000);
+              }
+            } catch (createError) {
+              console.error("Failed to initiate venv creation:", createError);
+              setVenvStatus("error");
+            }
+            return;
+          } else if (
+            venvStatusResult.status === "creating" ||
+            venvStatusResult.status === "installing_pip" ||
+            venvStatusResult.status === "installing_base" ||
+            venvStatusResult.status === "installing_lsp"
+          ) {
+            console.log(
+              `Virtual environment ${venvStatusResult.status}: ${venvStatusResult.message}`
+            );
+            setVenvStatus("creating");
+            // Poll again after 3 seconds for venv creation progress
+            if (!isCancelled) {
+              retryTimeout = setTimeout(() => {
+                checkVenvStatus();
+              }, 3000);
+            }
+            return;
+          } else if (venvStatusResult.status === "completed") {
+            // Explicitly handle completed status
+            console.log("Virtual environment creation completed");
+            setVenvStatus("ready");
+            return;
+          } else if (venvStatusResult.status === "failed") {
+            console.error(
+              "Virtual environment creation failed:",
+              venvStatusResult.error
+            );
+            setVenvStatus("error");
+            return;
+          }
+        } else {
+          // Venv is ready
+          setVenvStatus("ready");
+        }
+      } catch (error) {
+        console.error("Failed to check venv status:", error);
+        if (!isCancelled) {
+          setVenvStatus("error");
+        }
+      }
+    };
+
+    if (isOpen && projectId) {
+      checkVenvStatus();
     }
 
     return () => {
-      if (lspConnection && !isOpen) {
-        lspConnection.dispose();
-        setLspConnection(null);
+      isCancelled = true;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
       }
     };
-  }, [isOpen, projectId, lspConnection, isLspConnecting]);
+  }, [isOpen, projectId]);
+
+  // Connect to LSP when venv is ready (separate effect)
+  useEffect(() => {
+    let connectTimeout: NodeJS.Timeout | null = null;
+
+    const connectLSP = async () => {
+      if (!isOpen || !projectId || lspConnection || isLspConnecting || venvStatus !== "ready") {
+        return;
+      }
+
+      try {
+        setIsLspConnecting(true);
+        console.log("Connecting to LSP...");
+        const connection = await pythonLspClient.connect(projectId);
+        setLspConnection(connection);
+        console.log("LSP connected successfully");
+      } catch (error) {
+        console.error("Failed to connect to LSP:", error);
+        // Retry LSP connection after 5 seconds, but only if modal is still open
+        if (isOpen) {
+          connectTimeout = setTimeout(() => {
+            connectLSP();
+          }, 5000);
+        }
+      } finally {
+        setIsLspConnecting(false);
+      }
+    };
+
+    if (venvStatus === "ready") {
+      connectLSP();
+    }
+
+    return () => {
+      if (connectTimeout) {
+        clearTimeout(connectTimeout);
+      }
+    };
+  }, [isOpen, projectId, venvStatus, lspConnection, isLspConnecting]);
+
+  // Cleanup LSP connection when modal closes
+  useEffect(() => {
+    return () => {
+      if (!isOpen && lspConnection) {
+        lspConnection.dispose();
+        setLspConnection(null);
+        setVenvStatus("checking");
+      }
+    };
+  }, [isOpen, lspConnection]);
 
   // Fetch code and packages when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchCode();
-      fetchPackages();
     }
-  }, [isOpen, nodeId, fetchCode, fetchPackages]);
+  }, [isOpen, nodeId, fetchCode]);
 
   useEffect(() => {
     if (isOpen) {
@@ -258,11 +384,10 @@ const IdeModal: React.FC<IdeModalProps> = ({
     (editor: editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
       editorRef.current = editor;
 
-      // Create a model for the file with proper URI
-      const fileUri = `file:///${projectId}/${nodeId}_${nodeTitle.replace(
-        /\s+/g,
-        "_"
-      )}.py`;
+      // Create a model for the file with proper URI that matches executor's file system
+      // Sanitize the title the same way the backend does
+      const sanitizedTitle = nodeTitle.replace(/[^a-zA-Z0-9]/g, "_");
+      const fileUri = `file:///app/projects/${projectId}/${nodeId}_${sanitizedTitle}.py`;
 
       // Dispose old model if exists
       if (modelRef.current) {
@@ -273,8 +398,11 @@ const IdeModal: React.FC<IdeModalProps> = ({
       const model = createModel(code, "python", fileUri);
       modelRef.current = model;
       editor.setModel(model);
+      
+      // Focus editor to trigger LSP document sync
+      editor.focus();
 
-      // LSP will handle all language features
+      // LSP will handle all language features (diagnostics, hover, completion, etc.)
 
       // Configure editor options
       editor.updateOptions({
@@ -358,6 +486,37 @@ const IdeModal: React.FC<IdeModalProps> = ({
             {isLoadingCode && (
               <span className="text-sm text-gray-400">(Loading...)</span>
             )}
+            {venvStatus === "checking" && (
+              <span className="text-sm text-yellow-400">
+                (Checking environment...)
+              </span>
+            )}
+            {venvStatus === "creating" && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-blue-400">
+                  {venvProgress.message || "Setting up Python environment..."}
+                </span>
+                {venvProgress.progress !== undefined && venvProgress.progress > 0 && (
+                  <div className="w-32 h-2 bg-gray-700 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 transition-all duration-300"
+                      style={{ width: `${Math.min(100, Math.max(0, venvProgress.progress))}%` }}
+                    />
+                  </div>
+                )}
+                {venvProgress.current_package && (
+                  <span className="text-xs text-gray-400">
+                    ({venvProgress.current_package})
+                  </span>
+                )}
+              </div>
+            )}
+            {venvStatus === "error" && (
+              <span className="text-sm text-red-400">(Environment error)</span>
+            )}
+            {venvStatus === "ready" && !isLoadingCode && (
+              <span className="text-sm text-green-400">✓ Ready</span>
+            )}
           </h2>
           <X onClose={onClose} />
         </div>
@@ -365,9 +524,14 @@ const IdeModal: React.FC<IdeModalProps> = ({
         <div
           className={`flex-1 flex ${
             showTerminal ? "flex-col" : ""
-          } bg-neutral-900`}
+          } bg-neutral-900 overflow-hidden`}
         >
-          <div className={`${showTerminal ? "flex-1" : "h-full"} p-4`}>
+          <div
+            className={`${
+              showTerminal ? "flex-1" : "h-full"
+            } relative min-h-0 w-full`}
+            style={{ minHeight: "400px" }}
+          >
             <Editor
               height="100%"
               defaultLanguage="python"

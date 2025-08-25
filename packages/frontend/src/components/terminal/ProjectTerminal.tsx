@@ -58,7 +58,7 @@ export default function ProjectTerminal({
     }
   }, []);
 
-  const startHeartbeat = useCallback(() => {
+  const startHeartbeat = () => {
     // Clear existing heartbeat
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
@@ -66,16 +66,18 @@ export default function ProjectTerminal({
     
     // Send heartbeat every 30 seconds
     heartbeatRef.current = setInterval(() => {
-      sendCommand({ type: 'heartbeat' });
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'heartbeat' }));
+      }
     }, 30000);
-  }, [sendCommand]);
+  };
 
-  const stopHeartbeat = useCallback(() => {
+  const stopHeartbeat = () => {
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
       heartbeatRef.current = null;
     }
-  }, []);
+  };
 
   const connect = useCallback(() => {
     // Clean up any existing connection
@@ -88,7 +90,7 @@ export default function ProjectTerminal({
     setErrorMessage('');
     
     const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-    const url = `${protocol}://${location.host}/api/terminal?project_id=${encodeURIComponent(projectId)}&mode=${mode}`;
+    const url = `${protocol}://${location.host}/executor/terminal?project_id=${encodeURIComponent(projectId)}&mode=${mode}`;
     
     const ws = new WebSocket(url);
     wsRef.current = ws;
@@ -170,7 +172,7 @@ export default function ProjectTerminal({
         console.error('Failed to parse terminal message:', error);
       }
     };
-  }, [projectId, mode, onExit, onReady, onPackageChanged, startHeartbeat, stopHeartbeat]);
+  }, [projectId, mode, onExit, onReady, onPackageChanged]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -288,7 +290,7 @@ export default function ProjectTerminal({
         wsRef.current = null;
       }
     };
-  }, [connect, sendCommand, stopHeartbeat]);
+  }, [projectId, mode]);
 
   const handleClear = () => {
     if (termRef.current) {

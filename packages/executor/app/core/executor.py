@@ -1,10 +1,19 @@
-import subprocess
-import tempfile
-import os
-import sys
-from typing import Optional
+"""
+Code execution module for running Python code in isolated subprocess
+"""
 
-def execute_python_code(code: str, timeout: int = 30, python_executable: Optional[str] = None, working_dir: Optional[str] = None) -> dict:
+import subprocess
+import sys
+import tempfile
+from typing import Optional, Dict, Any
+from pathlib import Path
+
+def execute_python_code(
+    code: str, 
+    timeout: int = 30, 
+    python_executable: Optional[str] = None, 
+    working_dir: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Execute Python code in a secure temporary environment
     
@@ -36,16 +45,22 @@ def execute_python_code(code: str, timeout: int = 30, python_executable: Optiona
             
             return {
                 "output": result.stdout,
-                "error": result.stderr if result.stderr else None,
+                "error": result.stderr,
                 "exit_code": result.returncode
             }
-        finally:
-            os.unlink(temp_file_path)
             
+        finally:
+            # Clean up temp file
+            import os
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+                
     except subprocess.TimeoutExpired:
         return {
             "output": "",
-            "error": "Code execution timed out",
+            "error": f"Execution timed out after {timeout} seconds",
             "exit_code": -1
         }
     except Exception as e:
@@ -54,3 +69,19 @@ def execute_python_code(code: str, timeout: int = 30, python_executable: Optiona
             "error": str(e),
             "exit_code": -1
         }
+
+def get_project_venv_python(project_id: str) -> str:
+    """Get the Python executable path for a project's venv"""
+    import os
+    venv_path = Path(f"/app/projects/{project_id}/venv")
+    
+    if os.name == 'nt':
+        python_exe = venv_path / "Scripts" / "python.exe"
+    else:
+        python_exe = venv_path / "bin" / "python"
+    
+    if python_exe.exists():
+        return str(python_exe)
+    
+    # Fallback to system Python
+    return sys.executable

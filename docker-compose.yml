@@ -7,28 +7,54 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Mount source code for hot-reload with delegated for better performance
+      # Mount source code for hot-reload
       - ./packages/backend/app:/app/app:delegated
-      # Mount projects directory for persistent storage
+      # Mount projects directory for persistent storage (metadata only)
       - ./packages/backend/projects:/app/projects:delegated
-      # Mount LSP logs directory
-      - lsp-logs-dev:/var/log/aim-red/lsp
     environment:
       - PYTHONUNBUFFERED=1
       - DEVELOPMENT=true
-      # Disable reload to prevent watchfiles I/O errors on Windows/WSL2
-      - DISABLE_RELOAD=true
+      - EXECUTOR_URL=http://executor:8001
+    networks:
+      - aim-red-network
+    depends_on:
+      - executor
+    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  executor:
+    build:
+      context: ./packages/executor
+      dockerfile: Dockerfile
+    container_name: aim-red-executor
+    ports:
+      - "8001:8001"
+    volumes:
+      # Mount source code
+      - ./packages/executor/app:/app/app:delegated
+      # Mount projects directory for venvs and code
+      - executor-projects:/app/projects:delegated
+      # Mount LSP logs directory
+      - lsp-logs:/var/log/aim-red/lsp
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DEVELOPMENT=true
       # LSP Configuration
-      - LSP_LOG_LEVEL=DEBUG
+      - LSP_LOG_LEVEL=INFO
       - LSP_STDIO_LOG_DIR=/var/log/aim-red/lsp
       - LSP_IDLE_TTL_MS=600000
       - LSP_MAX_RESTARTS=5
       - LSP_RESTART_WINDOW_MS=60000
     networks:
       - aim-red-network
-    command: ["python", "run_dev.py"]
+    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -42,17 +68,13 @@ services:
     ports:
       - "5173:5173"
     volumes:
-      # Use named volumes for node_modules to preserve them in container
+      # Use named volumes for node_modules
       - frontend-node-modules:/app/node_modules
       - frontend-pkg-node-modules:/app/packages/frontend/node_modules
     environment:
       - VITE_API_URL=http://backend:8000
-      - CHOKIDAR_USEPOLLING=true
-      - WATCHPACK_POLLING=true
-      - VITE_HMR_PORT=5173
-      - VITE_HMR_HOST=localhost
+      - VITE_EXECUTOR_URL=http://executor:8001
       - NODE_OPTIONS=--max-old-space-size=4096
-      - DISABLE_WATCH=true  # Disable file watching due to WSL2 issues
     depends_on:
       - backend
     networks:
@@ -60,8 +82,7 @@ services:
     stdin_open: true
     tty: true
     command: >
-      sh -c "echo 'Starting dev server without hot reload...' &&
-             cd /app/packages/frontend &&
+      sh -c "cd /app/packages/frontend &&
              pnpm dev --host 0.0.0.0"
 
 networks:
@@ -69,7 +90,9 @@ networks:
     driver: bridge
 
 volumes:
-  lsp-logs-dev:
+  lsp-logs:
+    driver: local
+  executor-projects:
     driver: local
   frontend-node-modules:
     driver: local

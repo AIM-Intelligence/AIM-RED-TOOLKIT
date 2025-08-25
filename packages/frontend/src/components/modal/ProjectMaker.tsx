@@ -37,13 +37,14 @@ export default function ProjectMaker({ isOpen, onClose }: ProjectMakerProps) {
       });
 
       if (data.success) {
-        // Navigate to the newly created project
-        navigate(`/project/${projectId}`);
-
-        // Close modal if onClose is provided
+        // Close modal immediately if onClose is provided
         if (onClose) {
           onClose();
         }
+        
+        // Navigate to the newly created project immediately
+        // The venv will be created in the background
+        navigate(`/project/${projectId}`);
       } else {
         throw new Error("Failed to create project");
       }

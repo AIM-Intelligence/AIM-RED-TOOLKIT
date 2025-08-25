@@ -10,6 +10,7 @@ import {
   WebSocketMessageReader,
   WebSocketMessageWriter,
 } from 'vscode-ws-jsonrpc';
+import { initializeMonacoServices } from './monacoSetup';
 
 export type LspType = 'pyright' | 'ruff';
 export type LspStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
@@ -55,14 +56,22 @@ class LspClientConnection {
   async connect(): Promise<void> {
     if (this.isDisposed) return;
     
+    // Ensure Monaco services are initialized first
+    try {
+      await initializeMonacoServices();
+    } catch (error) {
+      console.error('Failed to initialize Monaco services:', error);
+      throw new Error(`Monaco initialization failed for ${this.lspType}`);
+    }
+    
     this.setStatus('connecting');
     
-    // For WebSocket, we need to connect directly through the current host
-    // The Vite proxy will handle the routing to the backend
+    // Connect to executor for LSP services
+    // The Vite proxy will handle the routing to the executor
     const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const host = window.location.host; // This includes port
-    const endpoint = this.lspType === 'pyright' ? 'python' : 'ruff';
-    const wsUrl = `${protocol}://${host}/api/lsp/${endpoint}?project_id=${encodeURIComponent(this.projectId)}`;
+    const endpoint = this.lspType; // Use the actual lsp type: 'pyright' or 'ruff'
+    const wsUrl = `${protocol}://${host}/executor/lsp/${endpoint}?project_id=${encodeURIComponent(this.projectId)}`;
     
     console.log(`Connecting to LSP ${this.lspType} at: ${wsUrl}`);
 
@@ -75,45 +84,123 @@ class LspClientConnection {
       
       // Wait for connection
       await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Connection timeout')), 10000);
+        const timeout = setTimeout(() => {
+          console.error(`[${this.lspType}] WebSocket connection timeout`);
+          reject(new Error('Connection timeout'));
+        }, 15000); // Increased timeout to 15s
         
         this.webSocket!.onopen = () => {
           clearTimeout(timeout);
+          console.log(`[${this.lspType}] WebSocket opened`);
           resolve();
         };
         
         this.webSocket!.onerror = (error) => {
           clearTimeout(timeout);
+          console.error(`[${this.lspType}] WebSocket error during connection:`, error);
           reject(error);
         };
       });
 
-      // Create Monaco Language Client
+      // Ensure WebSocket is fully ready and stable
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Create socket from WebSocket
+      console.log(`[${this.lspType}] Creating socket from WebSocket...`);
       const socket = toSocket(this.webSocket);
+      
+      // Validate socket was created successfully
+      if (!socket) {
+        throw new Error(`Failed to create socket from WebSocket for ${this.lspType}`);
+      }
+      
+      console.log(`[${this.lspType}] Creating message reader/writer...`);
+      
+      // Create reader and writer
       const reader = new WebSocketMessageReader(socket);
       const writer = new WebSocketMessageWriter(socket);
+      
+      // Let the reader/writer initialize properly
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const transports: MessageTransports = { reader, writer };
 
       this.client = new MonacoLanguageClient({
         name: `${this.lspType === 'pyright' ? 'Pyright' : 'Ruff'} Language Server`,
         clientOptions: {
-          documentSelector: [{ language: 'python' }],
+          documentSelector: [
+            { scheme: 'file', language: 'python' },
+            { scheme: 'untitled', language: 'python' },
+            { scheme: 'inmemory', language: 'python' }
+          ],
           errorHandler: {
-            error: () => ({ action: ErrorAction.Continue }),
-            closed: () => ({ action: CloseAction.DoNotRestart }), // We handle restart ourselves
+            error: (error, message, count) => {
+              console.error(`[${this.lspType}] Language client error:`, error, message, count);
+              return { action: ErrorAction.Continue };
+            },
+            closed: () => {
+              console.warn(`[${this.lspType}] Language client connection closed`);
+              return { action: CloseAction.DoNotRestart }; // We handle restart ourselves
+            },
           },
           synchronize: {
             // File watching is not supported in browser environment
-            // The server will handle file watching if needed
+            configurationSection: ['python', 'pyright', 'ruff'],
+            fileEvents: undefined, // Explicitly disable file watching
           },
           initializationOptions: this.getInitializationOptions(),
+          initializationFailedHandler: (error) => {
+            console.error(`[${this.lspType}] Language client initialization failed:`, error);
+            return false; // Don't show error popup
+          },
+          // Explicitly enable capabilities
+          middleware: {
+            // Ensure diagnostics are properly handled
+            handleDiagnostics: (uri, diagnostics, next) => {
+              console.log(`[${this.lspType}] Diagnostics for ${uri}:`, diagnostics.length);
+              next(uri, diagnostics);
+            },
+            // Log other LSP features for debugging
+            provideCompletionItem: async (document, position, context, token, next) => {
+              const result = await next(document, position, context, token);
+              if (result && Array.isArray(result) && result.length > 0) {
+                console.log(`[${this.lspType}] Completions available:`, result.length);
+              }
+              return result;
+            },
+            provideHover: async (document, position, token, next) => {
+              const result = await next(document, position, token);
+              if (result) {
+                console.log(`[${this.lspType}] Hover info available`);
+              }
+              return result;
+            },
+          },
         },
         connectionProvider: {
-          get: async () => transports,
+          get: async () => {
+            // Ensure WebSocket is still open before returning transports
+            if (this.webSocket?.readyState !== WebSocket.OPEN) {
+              throw new Error(`WebSocket not open for ${this.lspType}`);
+            }
+            
+            console.log(`[${this.lspType}] Providing transports to language client`);
+            return transports;
+          },
         },
       });
 
+      // Start the client
+      console.log(`[${this.lspType}] Starting language client...`);
       await this.client.start();
+      
+      // Wait for initialization to complete
+      try {
+        const initResult = await this.client.initializeResult;
+        console.log(`[${this.lspType}] Language client initialized:`, initResult);
+      } catch (e) {
+        console.warn(`[${this.lspType}] Could not get initialization result:`, e);
+      }
       
       this.setStatus('connected');
       this.reconnectAttempt = 0;
@@ -129,21 +216,48 @@ class LspClientConnection {
   private getInitializationOptions(): any {
     if (this.lspType === 'pyright') {
       return {
+        // Pyright expects these at the root level, not under 'python'
+        pythonPath: `/app/projects/${this.projectId}/venv/bin/python`,
+        venvPath: `/app/projects/${this.projectId}`,
+        venv: 'venv',
+        analysis: {
+          autoImportCompletions: true,
+          autoSearchPaths: true,
+          useLibraryCodeForTypes: true,
+          typeCheckingMode: 'standard',
+          diagnosticMode: 'openFilesOnly',
+          logLevel: 'Information',
+          extraPaths: [
+            `/app/projects/${this.projectId}`
+          ],
+        },
+        // Additional pyright settings
         python: {
-          analysis: {
-            autoImportCompletions: true,
-            autoSearchPaths: true,
-            useLibraryCodeForTypes: true,
-            typeCheckingMode: 'standard',
-            diagnosticMode: 'workspace',
-          },
+          pythonPath: `/app/projects/${this.projectId}/venv/bin/python`,
+          venvPath: `/app/projects/${this.projectId}`,
+          venv: 'venv',
         },
       };
     } else {
+      // Ruff configuration
       return {
         settings: {
-          lineLength: 88,
-          // Add more Ruff configuration as needed
+          // Ruff expects settings at this level
+          args: [],
+          logLevel: 'info',
+          path: [`/app/projects/${this.projectId}/venv/bin/ruff`],
+          interpreter: [`/app/projects/${this.projectId}/venv/bin/python`],
+          showNotifications: 'on',
+          organizeImports: true,
+          fixAll: true,
+          codeAction: {
+            fixViolation: {
+              enable: true
+            },
+            disableRuleComment: {
+              enable: true
+            }
+          },
         },
       };
     }

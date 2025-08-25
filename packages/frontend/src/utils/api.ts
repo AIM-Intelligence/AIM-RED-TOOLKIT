@@ -15,16 +15,12 @@ import type {
   CreateEdgeResponse,
   DeleteEdgeRequest,
   DeleteEdgeResponse,
-  CodeExecutionRequest,
-  CodeExecutionResponse,
   GetNodeCodeRequest,
   GetNodeCodeResponse,
   SaveNodeCodeRequest,
   SaveNodeCodeResponse,
   ExecuteFlowRequest,
   ExecuteFlowResponse,
-  AnalyzeFlowRequest,
-  AnalyzeFlowResponse,
   ErrorResponse,
 } from "../types";
 
@@ -138,27 +134,38 @@ export const projectApi = {
     });
   },
 
-  // Analyze flow
-  async analyzeFlow(data: AnalyzeFlowRequest): Promise<AnalyzeFlowResponse> {
-    return apiCall<AnalyzeFlowResponse>("/project/analyze-flow", {
+
+  // Check venv status with detailed progress
+  async getVenvStatus(projectId: string): Promise<{
+    success: boolean;
+    project_id: string;
+    venv_ready: boolean;
+    status?: string;
+    progress?: number;
+    message?: string;
+    error?: string;
+    current_package?: string;
+  }> {
+    return apiCall(`/project/${projectId}/venv-status`);
+  },
+
+  // Create venv for a project
+  async createVenv(projectId: string): Promise<{
+    success: boolean;
+    message?: string;
+    status?: string;
+  }> {
+    return apiCall(`/executor/venv/create`, {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify({ project_id: projectId }),
     });
   },
+
 };
 
 // ==================== Code APIs ====================
 
 export const codeApi = {
-  // Execute code
-  async executeCode(
-    data: CodeExecutionRequest
-  ): Promise<CodeExecutionResponse> {
-    return apiCall<CodeExecutionResponse>("/code/execute", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
 
   // Get node code
   async getNodeCode(data: GetNodeCodeRequest): Promise<GetNodeCodeResponse> {
@@ -195,61 +202,7 @@ export const codeApi = {
     });
   },
 
-  // Package management
-  async installPackage(data: {
-    project_id: string;
-    package: string;
-  }): Promise<{
-    success: boolean;
-    message: string;
-    project_id: string;
-    package: string;
-  }> {
-    return apiCall("/code/packages/install", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
 
-  async uninstallPackage(data: {
-    project_id: string;
-    package: string;
-  }): Promise<{
-    success: boolean;
-    message: string;
-    project_id: string;
-    package: string;
-  }> {
-    return apiCall("/code/packages/uninstall", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  async getPackages(data: {
-    project_id: string;
-  }): Promise<{
-    success: boolean;
-    project_id: string;
-    packages: Array<{ name: string; version: string }>;
-    python_executable: string;
-  }> {
-    return apiCall("/code/packages/list", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  async getPackageInfo(project_id: string, packageName: string): Promise<{
-    success: boolean;
-    project_id: string;
-    package: string;
-    info: Record<string, string>;
-  }> {
-    return apiCall(`/code/packages/info?project_id=${project_id}&package=${packageName}`, {
-      method: "POST",
-    });
-  },
 };
 
 // Export all API functions

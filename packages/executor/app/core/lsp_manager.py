@@ -55,8 +55,13 @@ class LspManager:
     def _cmd_for(self, lsp_type: LspType) -> Tuple[str, ...]:
         """Get command for LSP type"""
         if lsp_type == "pyright":
-            # Check if pyright-langserver is available
-            return ("pyright-langserver", "--stdio")
+            # When installed via npm globally in Docker, use pyright-langserver
+            # When installed via pip in venv, use pyright --langserver --stdio
+            import shutil
+            if shutil.which("pyright-langserver"):
+                return ("pyright-langserver", "--stdio")
+            else:
+                return ("pyright", "--langserver", "--stdio")
         elif lsp_type == "ruff":
             # Ruff server mode
             return ("ruff", "server")
@@ -74,6 +79,10 @@ class LspManager:
         # Use project directory if cwd not specified
         if not cwd:
             cwd = f"/app/projects/{project_id}"
+        
+        # Ensure project directory exists
+        import os
+        os.makedirs(cwd, exist_ok=True)
         
         async with self._lock:
             lp = self._procs.get(key)
@@ -137,27 +146,138 @@ class LspManager:
                 )
                 await asyncio.sleep(wait_time)
             
-            # Get command
-            cmd = self._cmd_for(lp.lsp_type)
+            # Get command - use project venv if available
+            venv_path = Path(lp.cwd) / "venv"
+            cmd = None
+            
+            if venv_path.exists():
+                # Use pyright and ruff from project venv
+                if os.name == 'nt':
+                    bin_dir = venv_path / "Scripts"
+                    pyright_exe = bin_dir / "pyright.exe"
+                    ruff_exe = bin_dir / "ruff.exe"
+                else:
+                    bin_dir = venv_path / "bin"
+                    pyright_exe = bin_dir / "pyright"
+                    ruff_exe = bin_dir / "ruff"
+                
+                # Check if executable exists
+                if lp.lsp_type == "pyright" and pyright_exe.exists():
+                    # When installed via pip in venv, pyright provides pyright-langserver
+                    pyright_langserver = bin_dir / ("pyright-langserver.exe" if os.name == 'nt' else "pyright-langserver")
+                    if pyright_langserver.exists():
+                        cmd = (str(pyright_langserver), "--stdio")
+                    else:
+                        # Fallback to pyright with --langserver --stdio
+                        cmd = (str(pyright_exe), "--langserver", "--stdio")
+                elif lp.lsp_type == "ruff" and ruff_exe.exists():
+                    cmd = (str(ruff_exe), "server")
+                else:
+                    self.log.warning(f"LSP executable not found in venv for {lp.lsp_type}: {pyright_exe if lp.lsp_type == 'pyright' else ruff_exe}")
+            
+            # Fallback to system commands if venv doesn't have LSP
+            if not cmd:
+                cmd = self._cmd_for(lp.lsp_type)
+                self.log.info(f"Using system command for {lp.lsp_type}: {cmd}")
+                
+                # Ensure pyrightconfig.json exists for pyright
+                if lp.lsp_type == "pyright":
+                    config_path = Path(lp.cwd) / "pyrightconfig.json"
+                    if not config_path.exists():
+                        self._generate_pyright_config(lp.cwd)
+            
+            # Build environment with venv activated
+            env = os.environ.copy()
+            if venv_path.exists():
+                env["VIRTUAL_ENV"] = str(venv_path)
+                if os.name == 'nt':
+                    env["PATH"] = str(venv_path / "Scripts") + os.pathsep + env.get("PATH", "")
+                else:
+                    env["PATH"] = str(venv_path / "bin") + os.pathsep + env.get("PATH", "")
+                env["PYTHONPATH"] = lp.cwd
             
             # Log startup
             log_lsp_lifecycle(
                 "start",
                 lp.project_id,
                 lp.lsp_type,
-                cmd=" ".join(cmd),
+                cmd=" ".join(cmd) if isinstance(cmd, tuple) else cmd,
                 cwd=lp.cwd,
                 attempt=lp.restart_attempts_in_window
             )
             
-            # Start the process
-            lp.proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                cwd=lp.cwd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
+            # Start the process with the project venv environment
+            # cmd can be tuple or string, handle both cases
+            if isinstance(cmd, tuple):
+                cmd_list = list(cmd)
+            else:
+                cmd_list = [cmd]
+            
+            # Ensure the working directory exists
+            if not Path(lp.cwd).exists():
+                self.log.warning(f"Creating missing project directory: {lp.cwd}")
+                Path(lp.cwd).mkdir(parents=True, exist_ok=True)
+            
+            try:
+                self.log.info(
+                    f"Starting LSP process",
+                    extra={
+                        "project_id": lp.project_id,
+                        "lsp": lp.lsp_type,
+                        "command": cmd_list,
+                        "cwd": lp.cwd
+                    }
+                )
+                
+                lp.proc = await asyncio.create_subprocess_exec(
+                    *cmd_list,
+                    cwd=lp.cwd,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env
+                )
+                
+                # Give the process a moment to start
+                await asyncio.sleep(0.1)
+                
+                # Check if process started successfully
+                if lp.proc.returncode is not None:
+                    # Process already exited
+                    stderr_output = await lp.proc.stderr.read()
+                    self.log.error(
+                        f"LSP process exited immediately",
+                        extra={
+                            "project_id": lp.project_id,
+                            "lsp": lp.lsp_type,
+                            "returncode": lp.proc.returncode,
+                            "stderr": stderr_output.decode(errors='replace')[:500]
+                        }
+                    )
+                    raise RuntimeError(f"LSP {lp.lsp_type} exited immediately with code {lp.proc.returncode}")
+                    
+            except FileNotFoundError as e:
+                self.log.error(
+                    f"LSP executable not found",
+                    extra={
+                        "project_id": lp.project_id,
+                        "lsp": lp.lsp_type,
+                        "command": cmd_list[0] if cmd_list else "unknown",
+                        "error": str(e)
+                    }
+                )
+                raise RuntimeError(f"LSP executable not found for {lp.lsp_type}: {cmd_list[0] if cmd_list else 'unknown'}")
+            except Exception as e:
+                self.log.error(
+                    f"Failed to start LSP process",
+                    extra={
+                        "project_id": lp.project_id,
+                        "lsp": lp.lsp_type,
+                        "command": cmd_list,
+                        "error": str(e)
+                    }
+                )
+                raise
             
             lp.started_at = time.time()
             lp.last_started_ts = lp.started_at
@@ -180,6 +300,32 @@ class LspManager:
             raise
         finally:
             lp.is_starting = False
+    
+    def _generate_pyright_config(self, cwd: str) -> None:
+        """Generate pyrightconfig.json for project virtual environment"""
+        import json
+        venv_path = Path(cwd) / "venv"
+        config_path = Path(cwd) / "pyrightconfig.json"
+        
+        config = {
+            "venvPath": str(Path(cwd).absolute()),
+            "venv": "venv",
+            "pythonVersion": "3.11",
+            "include": ["."],
+            "exclude": ["venv", "__pycache__", ".git"],
+            "reportMissingImports": "warning",
+            "reportMissingTypeStubs": "information",
+            "reportGeneralTypeIssues": "warning",
+            "pythonPlatform": "Linux",
+            "typeCheckingMode": "basic"
+        }
+        
+        try:
+            with open(config_path, 'w') as f:
+                json.dump(config, f, indent=2)
+            self.log.info(f"Generated pyrightconfig.json at {config_path}")
+        except Exception as e:
+            self.log.error(f"Failed to generate pyrightconfig.json: {e}")
     
     async def _drain_stream(
         self, 

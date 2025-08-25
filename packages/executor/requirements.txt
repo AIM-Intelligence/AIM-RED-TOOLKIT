@@ -1,0 +1,15 @@
+# FastAPI and server
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+websockets==14.1
+
+# Core dependencies
+pydantic==2.10.3
+aiofiles==24.1.0
+python-multipart==0.0.12
+
+# Development and testing
+httpx==0.28.1
+
+# For terminal support
+ptyprocess==0.7.0
