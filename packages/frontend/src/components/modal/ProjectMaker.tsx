@@ -87,7 +87,7 @@ export default function ProjectMaker({ isOpen, onClose }: ProjectMakerProps) {
           <div>
             <label
               htmlFor="projectName"
-              className="block text-sm font-medium text-gray-300 mb-2"
+              className="block text-sm font-medium text-neutral-300 mb-2"
             >
               Project Name *
             </label>
@@ -97,7 +97,7 @@ export default function ProjectMaker({ isOpen, onClose }: ProjectMakerProps) {
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               placeholder="Enter project name"
-              className="w-full px-4 py-2 bg-neutral-800 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-red-800 transition-colors"
+              className="w-full px-4 py-2 bg-neutral-800 text-white border border-neutral-600 rounded-lg focus:outline-none focus:border-red-800 transition-colors"
               disabled={isLoading}
               maxLength={100}
             />
@@ -106,7 +106,7 @@ export default function ProjectMaker({ isOpen, onClose }: ProjectMakerProps) {
           <div>
             <label
               htmlFor="projectDescription"
-              className="block text-sm font-medium text-gray-300 mb-2"
+              className="block text-sm font-medium text-neutral-300 mb-2"
             >
               Project Description
             </label>

@@ -25,7 +25,7 @@ export default function ProjectError({ error, onRetry }: ProjectErrorProps) {
         <h2 className="text-xl font-semibold text-white mb-2">
           Failed to load project
         </h2>
-        <p className="text-gray-400 mb-4">{error}</p>
+        <p className="text-neutral-400 mb-4">{error}</p>
         <button
           onClick={onRetry}
           className="px-4 py-2 bg-red-800 text-white rounded hover:bg-red-700 transition-colors"

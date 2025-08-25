@@ -30,7 +30,7 @@ const DeleteCheck: React.FC<DeleteCheckProps> = ({
       onClick={handleBackgroundClick}
     >
       <div
-        className="bg-gray-900 rounded-xl p-6 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp max-w-md w-full mx-4"
+        className="bg-neutral-900 rounded-xl p-6 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Icon */}
@@ -58,11 +58,12 @@ const DeleteCheck: React.FC<DeleteCheckProps> = ({
         </h2>
 
         {/* Message */}
-        <p className="text-gray-300 text-center mb-2">
+        <p className="text-neutral-300 text-center mb-2">
           Do you really want to delete this project?
         </p>
-        <p className="text-gray-400 text-sm text-center mb-6">
-          <span className="font-semibold text-white">{projectName}</span> will be permanently deleted.
+        <p className="text-neutral-400 text-sm text-center mb-6">
+          <span className="font-semibold text-white">{projectName}</span> will
+          be permanently deleted.
         </p>
 
         {/* Buttons */}
@@ -70,7 +71,7 @@ const DeleteCheck: React.FC<DeleteCheckProps> = ({
           <button
             onClick={onClose}
             disabled={isDeleting}
-            className="flex-1 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-2 bg-neutral-700 text-white rounded-lg hover:bg-neutral-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </button>

@@ -37,7 +37,6 @@ const IdeModal: React.FC<IdeModalProps> = ({
   );
   const [runResult, setRunResult] = useState<string>("");
 
-
   // Fetch code from backend when modal opens
   const fetchCode = useCallback(async () => {
     if (!projectId || !nodeId) return;
@@ -127,7 +126,6 @@ const IdeModal: React.FC<IdeModalProps> = ({
       setRunResult(error instanceof Error ? error.message : "Unknown error");
     }
   }, [projectId, nodeId, nodeTitle]);
-
 
   // Fetch code when modal opens
   useEffect(() => {
@@ -245,7 +243,6 @@ const IdeModal: React.FC<IdeModalProps> = ({
     [code, projectId, nodeId, nodeTitle, handleRunCode]
   );
 
-
   if (!isOpen) return null;
 
   return (
@@ -257,11 +254,11 @@ const IdeModal: React.FC<IdeModalProps> = ({
         className="bg-neutral-950 rounded-lg shadow-2xl w-11/12 max-w-6xl h-5/6 flex flex-col animate-scaleIn relative"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center p-4 border-b border-gray-700">
+        <div className="flex justify-between items-center p-4 border-b border-neutral-700">
           <h2 className="text-xl font-semibold text-white flex items-center gap-2">
             Python IDE - {nodeTitle}
             {isLoadingCode && (
-              <span className="text-sm text-gray-400">(Loading...)</span>
+              <span className="text-sm text-neutral-400">(Loading...)</span>
             )}
           </h2>
           <X onClose={onClose} />
@@ -282,7 +279,7 @@ const IdeModal: React.FC<IdeModalProps> = ({
           />
         </div>
 
-        <div className="p-4 border-t border-gray-700 flex justify-between">
+        <div className="p-4 border-t border-neutral-700 flex justify-between">
           <div className="flex gap-2">
             <button
               onClick={handleSave}
@@ -303,8 +300,6 @@ const IdeModal: React.FC<IdeModalProps> = ({
             />
           </div>
         </div>
-
-
 
         {/* Save Modal */}
         <LoadingModal

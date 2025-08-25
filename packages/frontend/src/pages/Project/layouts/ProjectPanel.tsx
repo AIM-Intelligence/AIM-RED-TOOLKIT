@@ -36,7 +36,7 @@ export default function ProjectPanel({
       >
         + Add Node
       </button>
-      <div className="text-gray-400 text-sm">
+      <div className="text-neutral-400 text-sm">
         Nodes: {nodeCount} | Edges: {edgeCount}
       </div>
     </div>

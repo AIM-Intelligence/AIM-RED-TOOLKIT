@@ -48,7 +48,7 @@ export default function LoadingModal({
       onClick={handleBackgroundClick}
     >
       <div
-        className={`bg-gray-900 rounded-xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp ${
+        className={`bg-neutral-900 rounded-xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp ${
           status === "error" && notice.errorDetails
             ? "max-w-2xl max-h-[80vh] overflow-auto"
             : ""
@@ -113,11 +113,11 @@ export default function LoadingModal({
             </span>
             {notice.errorDetails && (
               <div className="w-full">
-                <div className="border-t border-gray-700 mt-2 pt-4">
-                  <p className="text-gray-400 text-sm mb-2 font-semibold">
+                <div className="border-t border-neutral-700 mt-2 pt-4">
+                  <p className="text-neutral-400 text-sm mb-2 font-semibold">
                     Error Details:
                   </p>
-                  <pre className="bg-black/50 rounded-lg p-4 text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap break-words">
+                  <pre className="bg-black/50 rounded-lg p-4 text-xs text-neutral-300 overflow-x-auto whitespace-pre-wrap break-words">
                     {notice.errorDetails}
                   </pre>
                 </div>

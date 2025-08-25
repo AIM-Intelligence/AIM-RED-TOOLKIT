@@ -62,7 +62,7 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
       />
       <div
         className={clsx(
-          "bg-black rounded-lg border-2 border-gray-500 p-4 min-w-[200px] relative",
+          "bg-black rounded-lg border-2 border-neutral-500 p-4 min-w-[200px] relative",
           hovering && "border-red-400 shadow-lg"
         )}
         onMouseEnter={() => setHovering(true)}
@@ -82,7 +82,7 @@ export default function DefaultNode(props: NodeProps<DefaultNodeType>) {
           <h3 className="text-white font-semibold text-sm mb-1">
             {props.data.title || "Node Title"}
           </h3>
-          <p className="text-gray-400 text-xs mb-2">
+          <p className="text-neutral-400 text-xs mb-2">
             {props.data.description || "Node description"}
           </p>
           <button
