@@ -195,61 +195,6 @@ export const codeApi = {
     });
   },
 
-  // Package management
-  async installPackage(data: {
-    project_id: string;
-    package: string;
-  }): Promise<{
-    success: boolean;
-    message: string;
-    project_id: string;
-    package: string;
-  }> {
-    return apiCall("/code/packages/install", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  async uninstallPackage(data: {
-    project_id: string;
-    package: string;
-  }): Promise<{
-    success: boolean;
-    message: string;
-    project_id: string;
-    package: string;
-  }> {
-    return apiCall("/code/packages/uninstall", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  async getPackages(data: {
-    project_id: string;
-  }): Promise<{
-    success: boolean;
-    project_id: string;
-    packages: Array<{ name: string; version: string }>;
-    python_executable: string;
-  }> {
-    return apiCall("/code/packages/list", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  async getPackageInfo(project_id: string, packageName: string): Promise<{
-    success: boolean;
-    project_id: string;
-    package: string;
-    info: Record<string, string>;
-  }> {
-    return apiCall(`/code/packages/info?project_id=${project_id}&package=${packageName}`, {
-      method: "POST",
-    });
-  },
 };
 
 // Export all API functions

@@ -2,8 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
-from app.api import health, code, project, lsp, lsp_debug
-from app.core.lsp_manager import lsp_manager
+from app.api import health, code, project
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -14,24 +13,10 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting AIM Red Toolkit Backend")
     
-    # Start LSP idle collection task
-    idle_task = asyncio.create_task(lsp_manager.idle_collect())
-    logger.info("Started LSP idle collection task")
-    
     yield
     
     # Shutdown
     logger.info("Shutting down AIM Red Toolkit Backend")
-    
-    # Cancel idle collection task
-    idle_task.cancel()
-    try:
-        await idle_task
-    except asyncio.CancelledError:
-        pass
-    
-    # Stop all LSP processes gracefully
-    # Note: This is handled by process cleanup, but we can add explicit cleanup if needed
     logger.info("Shutdown complete")
 
 app = FastAPI(
@@ -62,9 +47,8 @@ async def root():
         "message": "AIM Red Toolkit Backend API",
         "status": "healthy",
         "features": {
-            "lsp": "enabled",
-            "pyright": "available",
-            "ruff": "available"
+            "flow_execution": "enabled",
+            "code_editor": "available"
         }
     }
 
@@ -72,10 +56,6 @@ async def root():
 app.include_router(health.router, prefix="/api")
 app.include_router(code.router, prefix="/api/code")
 app.include_router(project.router, prefix="/api/project")
-
-# LSP endpoints (WebSocket and management)
-app.include_router(lsp.router, prefix="/api/lsp")
-app.include_router(lsp_debug.router, prefix="/api/lsp")
 
 if __name__ == "__main__":
     import uvicorn

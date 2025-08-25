@@ -12,7 +12,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from collections import defaultdict, deque
 
 from .execute_code import execute_python_code
-from .venv_manager import VenvManager
 
 
 class FlowExecutor:
@@ -20,7 +19,6 @@ class FlowExecutor:
     
     def __init__(self, projects_root: str):
         self.projects_root = Path(projects_root)
-        self.venv_manager = VenvManager(projects_root)
     
     def _load_structure(self, project_id: str) -> Tuple[Dict[str, Dict], List[Dict]]:
         """Load project structure from JSON file"""
@@ -258,9 +256,9 @@ except Exception as e:
     }}))
 """
         
-        # Execute with isolation using project's virtual environment
+        # Execute with system Python environment
         start_time = time.time()
-        python_exe = self.venv_manager.ensure_venv(project_id)
+        python_exe = None  # Use system Python
         project_dir = str(self.projects_root / project_id)
         execution_result = execute_python_code(wrapper_code, timeout, python_exe, project_dir)
         execution_time_ms = round((time.time() - start_time) * 1000)

@@ -94,7 +94,7 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
     <>
       <div
         className={clsx(
-          "bg-black rounded-lg border-2 border-gray-500 p-4 min-w-[200px] relative flex flex-col items-center justify-center",
+          "bg-black rounded-lg border-2 border-neutral-500 p-4 min-w-[200px] relative flex flex-col items-center justify-center",
           hovering && "border-red-400 shadow-lg"
         )}
         onMouseEnter={() => setHovering(true)}
@@ -116,8 +116,8 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
           {/* Result preview */}
           {hasResult && (
             <div className="mb-2">
-              <div className="text-xs text-gray-400 mb-1">Output:</div>
-              <div className="bg-gray-900 rounded p-2 max-w-[250px] max-h-[100px] overflow-auto">
+              <div className="text-xs text-neutral-400 mb-1">Output:</div>
+              <div className="bg-neutral-900 rounded p-2 max-w-[250px] max-h-[100px] overflow-auto">
                 <pre className="text-xs text-green-400 whitespace-pre-wrap break-all">
                   {resultPreview}
                 </pre>
@@ -131,7 +131,7 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
               "text-xs px-2 py-1 rounded transition-colors w-full",
               hasResult
                 ? "bg-green-800 text-white hover:bg-green-700"
-                : "bg-gray-600 text-gray-400 cursor-not-allowed"
+                : "bg-neutral-600 text-neutral-400 cursor-not-allowed"
             )}
             onClick={handleGetResult}
             disabled={!hasResult}

@@ -6,12 +6,6 @@ import SimpleExportButton from "../buttons/ide/SimpleExportButton";
 import LoadingModal from "./LoadingModal";
 import { codeApi } from "../../utils/api";
 import X from "../buttons/modal/x";
-import { pythonLspClient, type LSPConnection } from "../../lsp/pythonLspClient";
-import {
-  initializeMonacoServices,
-  createModel,
-  disposeModel,
-} from "../../lsp/monacoSetup";
 
 interface IdeModalProps {
   isOpen: boolean;
@@ -42,97 +36,7 @@ const IdeModal: React.FC<IdeModalProps> = ({
     "loading"
   );
   const [runResult, setRunResult] = useState<string>("");
-  const [installedPackages, setInstalledPackages] = useState<
-    Array<{ name: string; version: string }>
-  >([]);
-  const [showPackageManager, setShowPackageManager] = useState(false);
-  const [packageInput, setPackageInput] = useState("");
-  const [isInstallingPackage, setIsInstallingPackage] = useState(false);
-  const [lspConnection, setLspConnection] = useState<LSPConnection | null>(
-    null
-  );
-  const [isLspConnecting, setIsLspConnecting] = useState(false);
-  const modelRef = useRef<Monaco.editor.ITextModel | null>(null);
 
-  // Fetch installed packages
-  const fetchPackages = useCallback(async () => {
-    if (!projectId) return;
-
-    try {
-      const data = await codeApi.getPackages({ project_id: projectId });
-      if (data.success) {
-        setInstalledPackages(data.packages);
-      }
-    } catch (error) {
-      console.error("Error fetching packages:", error);
-    }
-  }, [projectId]);
-
-  // Install package
-  const handleInstallPackage = async () => {
-    if (!packageInput.trim() || !projectId) return;
-
-    setIsInstallingPackage(true);
-    try {
-      const result = await codeApi.installPackage({
-        project_id: projectId,
-        package: packageInput.trim(),
-      });
-
-      if (result.success) {
-        await fetchPackages();
-        setPackageInput("");
-        alert(`Successfully installed ${packageInput}`);
-        // Restart LSP to pick up new packages
-        if (lspConnection) {
-          await lspConnection.restart();
-        }
-      } else {
-        alert(`Failed to install ${packageInput}: ${result.message}`);
-      }
-    } catch (error) {
-      console.error("Error installing package:", error);
-      alert(
-        `Error installing package: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    } finally {
-      setIsInstallingPackage(false);
-    }
-  };
-
-  // Uninstall package
-  const handleUninstallPackage = async (packageName: string) => {
-    if (!projectId) return;
-
-    if (!confirm(`Are you sure you want to uninstall ${packageName}?`)) return;
-
-    try {
-      const result = await codeApi.uninstallPackage({
-        project_id: projectId,
-        package: packageName,
-      });
-
-      if (result.success) {
-        await fetchPackages();
-        alert(`Successfully uninstalled ${packageName}`);
-        // Restart LSP to reflect removed packages
-        if (lspConnection) {
-          await lspConnection.restart();
-        }
-      } else {
-        alert(`Failed to uninstall ${packageName}: ${result.message}`);
-      }
-    } catch (error) {
-      console.error("Error uninstalling package:", error);
-      alert(
-        `Error uninstalling package: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
-      );
-    }
-  };
 
   // Fetch code from backend when modal opens
   const fetchCode = useCallback(async () => {
@@ -224,44 +128,13 @@ const IdeModal: React.FC<IdeModalProps> = ({
     }
   }, [projectId, nodeId, nodeTitle]);
 
-  // Initialize Monaco services on first mount
-  useEffect(() => {
-    initializeMonacoServices().catch(console.error);
-  }, []);
 
-  // Connect to LSP when modal opens
-  useEffect(() => {
-    if (isOpen && projectId && !lspConnection && !isLspConnecting) {
-      setIsLspConnecting(true);
-      pythonLspClient
-        .connect(projectId)
-        .then((connection) => {
-          setLspConnection(connection);
-          console.log("LSP connected successfully");
-        })
-        .catch((error) => {
-          console.error("Failed to connect to LSP:", error);
-        })
-        .finally(() => {
-          setIsLspConnecting(false);
-        });
-    }
-
-    return () => {
-      if (lspConnection && !isOpen) {
-        lspConnection.dispose();
-        setLspConnection(null);
-      }
-    };
-  }, [isOpen, projectId, lspConnection, isLspConnecting]);
-
-  // Fetch code and packages when modal opens
+  // Fetch code when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchCode();
-      fetchPackages();
     }
-  }, [isOpen, nodeId, fetchCode, fetchPackages]);
+  }, [isOpen, nodeId, fetchCode]);
 
   useEffect(() => {
     if (isOpen) {
@@ -314,16 +187,8 @@ const IdeModal: React.FC<IdeModalProps> = ({
     (editor: editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
       editorRef.current = editor;
 
-      // Create a model for the file with proper URI
-      const fileUri = `file:///${projectId}/${nodeId}_${nodeTitle.replace(
-        /\s+/g,
-        "_"
-      )}.py`;
-      const model = createModel(code, "python", fileUri);
-      modelRef.current = model;
-      editor.setModel(model);
-
-      // LSP will handle all language features
+      // Set the code directly
+      editor.setValue(code);
 
       // Configure editor options
       editor.updateOptions({
@@ -380,15 +245,6 @@ const IdeModal: React.FC<IdeModalProps> = ({
     [code, projectId, nodeId, nodeTitle, handleRunCode]
   );
 
-  // Cleanup model on unmount
-  useEffect(() => {
-    return () => {
-      if (modelRef.current) {
-        disposeModel(modelRef.current);
-        modelRef.current = null;
-      }
-    };
-  }, []);
 
   if (!isOpen) return null;
 
@@ -446,113 +302,9 @@ const IdeModal: React.FC<IdeModalProps> = ({
               fileName={`${nodeId}_${nodeTitle.replace(/\s+/g, "_")}.py`}
             />
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowPackageManager(!showPackageManager)}
-              className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors flex items-center gap-2"
-            >
-              Packages
-            </button>
-          </div>
         </div>
 
-        {/* Package Manager Slide-out Panel */}
-        <div
-          className={`absolute top-0 right-0 h-full w-80 bg-neutral-900 border-l border-gray-700 transform transition-transform ${
-            showPackageManager ? "translate-x-0" : "translate-x-full"
-          } z-10`}
-        >
-          <div className="p-4 border-b border-gray-700 flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-white">
-              Package Manager
-            </h3>
-            <button
-              onClick={() => setShowPackageManager(false)}
-              className="text-gray-400 hover:text-white"
-            >
-              ✕
-            </button>
-          </div>
 
-          <div className="p-4">
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Install Package
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={packageInput}
-                  onChange={(e) => setPackageInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleInstallPackage()}
-                  placeholder="e.g., numpy, pandas==2.0.0"
-                  className="flex-1 px-3 py-2 bg-neutral-800 border border-gray-600 rounded text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
-                  disabled={isInstallingPackage}
-                />
-                <button
-                  onClick={handleInstallPackage}
-                  disabled={isInstallingPackage || !packageInput.trim()}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isInstallingPackage ? "Installing..." : "Install"}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <h4 className="text-sm font-medium text-gray-300 mb-2">
-                Installed Packages ({installedPackages.length})
-              </h4>
-              <div className="max-h-96 overflow-y-auto">
-                {installedPackages.length === 0 ? (
-                  <p className="text-gray-500 text-sm">No packages installed</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {installedPackages.map((pkg) => (
-                      <li
-                        key={pkg.name}
-                        className="flex justify-between items-center px-3 py-2 bg-neutral-800 rounded hover:bg-neutral-700 group"
-                      >
-                        <span className="text-white text-sm">
-                          {pkg.name}{" "}
-                          <span className="text-gray-500">v{pkg.version}</span>
-                        </span>
-                        <button
-                          onClick={() => handleUninstallPackage(pkg.name)}
-                          className="text-red-400 hover:text-red-300 opacity-0 group-hover:opacity-100 transition-opacity text-sm"
-                        >
-                          Uninstall
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* LSP Status Indicator */}
-        <div className="absolute bottom-4 right-4 flex items-center gap-2 text-xs text-gray-400">
-          {isLspConnecting && (
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
-              Connecting to language server...
-            </span>
-          )}
-          {lspConnection && !isLspConnecting && (
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
-              Language server connected
-            </span>
-          )}
-          {!lspConnection && !isLspConnecting && (
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 bg-gray-500 rounded-full"></span>
-              Language server offline
-            </span>
-          )}
-        </div>
 
         {/* Save Modal */}
         <LoadingModal

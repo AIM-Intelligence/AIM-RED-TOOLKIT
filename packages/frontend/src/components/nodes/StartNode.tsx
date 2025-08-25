@@ -155,7 +155,7 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
       />
       <div
         className={clsx(
-          "bg-black rounded-lg border-2 border-gray-500 p-4 min-w-[100px] relative flex flex-col items-center justify-center",
+          "bg-black rounded-lg border-2 border-neutral-500 p-4 min-w-[100px] relative flex flex-col items-center justify-center",
           hovering && "border-red-400 shadow-lg"
         )}
         onMouseEnter={() => setHovering(true)}
@@ -177,7 +177,7 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
             className={clsx(
               "text-xs text-white px-2 py-1 rounded transition-colors",
               isRunning
-                ? "bg-gray-600 cursor-not-allowed"
+                ? "bg-neutral-600 cursor-not-allowed"
                 : "bg-red-800 hover:bg-red-700"
             )}
             onClick={handleRunFlow}

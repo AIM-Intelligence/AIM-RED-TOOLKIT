@@ -3,14 +3,12 @@ from pydantic import BaseModel
 from typing import Optional, Any, Dict, List
 from ..core.execute_code import execute_python_code
 from ..core import node_operations
-from ..core.venv_manager import VenvManager
 import os
 
 router = APIRouter()
 
-# Initialize VenvManager with projects root
+# Projects root path
 PROJECTS_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "projects")
-venv_manager = VenvManager(PROJECTS_ROOT)
 
 class CodeExecutionRequest(BaseModel):
     code: str
@@ -162,10 +160,9 @@ except Exception as e:
     }}))
 """
         
-        # Execute the code using project's virtual environment
-        python_exe = venv_manager.ensure_venv(request.project_id)
+        # Execute the code using system Python
         project_dir = os.path.join(PROJECTS_ROOT, request.project_id)
-        execution_result = execute_python_code(wrapper_code, timeout=30, python_executable=python_exe, working_dir=project_dir)
+        execution_result = execute_python_code(wrapper_code, timeout=30, python_executable=None, working_dir=project_dir)
         
         if execution_result['exit_code'] == 0:
             try:
@@ -206,59 +203,35 @@ except Exception as e:
 
 @router.post("/packages/install")
 async def install_package(request: PackageInstallRequest):
-    """Install a package in the project's virtual environment"""
-    try:
-        success, message = venv_manager.install_package(request.project_id, request.package)
-        return {
-            "success": success,
-            "message": message,
-            "project_id": request.project_id,
-            "package": request.package
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Install a package (not currently supported without virtual environments)"""
+    return {
+        "success": False,
+        "message": "Package management is not available in single Python environment mode",
+        "project_id": request.project_id,
+        "package": request.package
+    }
 
 @router.post("/packages/uninstall")
 async def uninstall_package(request: PackageUninstallRequest):
-    """Uninstall a package from the project's virtual environment"""
-    try:
-        success, message = venv_manager.uninstall_package(request.project_id, request.package)
-        return {
-            "success": success,
-            "message": message,
-            "project_id": request.project_id,
-            "package": request.package
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Uninstall a package (not currently supported without virtual environments)"""
+    return {
+        "success": False,
+        "message": "Package management is not available in single Python environment mode",
+        "project_id": request.project_id,
+        "package": request.package
+    }
 
 @router.post("/packages/list")
 async def get_packages(request: GetPackagesRequest):
-    """Get list of installed packages in the project's virtual environment"""
-    try:
-        packages = venv_manager.get_installed_packages(request.project_id)
-        return {
-            "success": True,
-            "project_id": request.project_id,
-            "packages": packages,
-            "python_executable": venv_manager.get_python_executable(request.project_id)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Get list of installed packages (returns empty in single Python mode)"""
+    return {
+        "success": True,
+        "project_id": request.project_id,
+        "packages": [],
+        "python_executable": "system"
+    }
 
 @router.post("/packages/info")
 async def get_package_info(project_id: str, package: str):
-    """Get detailed information about a specific package"""
-    try:
-        info = venv_manager.get_package_info(project_id, package)
-        if info:
-            return {
-                "success": True,
-                "project_id": project_id,
-                "package": package,
-                "info": info
-            }
-        else:
-            raise HTTPException(status_code=404, detail=f"Package {package} not found")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Get detailed information about a specific package (not available)"""
+    raise HTTPException(status_code=404, detail="Package management is not available in single Python environment mode")

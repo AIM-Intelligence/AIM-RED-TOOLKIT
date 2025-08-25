@@ -8,7 +8,6 @@ from .projects_registry import (
     remove_project_from_registry,
     get_projects_registry
 )
-from .venv_manager import VenvManager
 
 # Get absolute path to projects directory
 PROJECTS_BASE_PATH = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "projects"
@@ -66,12 +65,6 @@ def delete_project(project_name: str, project_id:str) -> Dict[str, Any]:
     if not project_path.exists():
         raise ValueError(f"Project with ID '{project_id}' does not exist")
     
-    # Delete virtual environment if it exists
-    try:
-        venv_manager = VenvManager(str(PROJECTS_BASE_PATH))
-        venv_manager.delete_venv(project_id)
-    except Exception as e:
-        print(f"Warning: Failed to delete venv for project {project_id}: {e}")
     
     # Delete folder
     shutil.rmtree(project_path)
