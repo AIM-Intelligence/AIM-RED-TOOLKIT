@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { projectApi } from "../../utils/api";
+import X from "../buttons/modal/x";
 
-interface NodeMakerProps {
+interface ProjectMakerProps {
   isOpen: boolean;
-  onClose?: () => void;
+  onClose: () => void;
 }
 
-export default function NodeMaker({ isOpen, onClose }: NodeMakerProps) {
+export default function ProjectMaker({ isOpen, onClose }: ProjectMakerProps) {
   const navigate = useNavigate();
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
@@ -28,33 +30,21 @@ export default function NodeMaker({ isOpen, onClose }: NodeMakerProps) {
     const projectId = crypto.randomUUID();
 
     try {
-      const response = await fetch("/api/project/make", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          project_name: projectName.trim(),
-          project_description: projectDescription.trim() || "",
-          project_id: projectId,
-        }),
+      const data = await projectApi.createProject({
+        project_name: projectName.trim(),
+        project_description: projectDescription.trim() || "",
+        project_id: projectId,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to create project");
-      }
-
-      const data = await response.json();
-
       if (data.success) {
-        // Navigate to the newly created project
-        navigate(`/project/${projectId}`);
-
-        // Close modal if onClose is provided
+        // Close modal immediately if onClose is provided
         if (onClose) {
           onClose();
         }
+        
+        // Navigate to the newly created project immediately
+        // The venv will be created in the background
+        navigate(`/project/${projectId}`);
       } else {
         throw new Error("Failed to create project");
       }
@@ -83,42 +73,18 @@ export default function NodeMaker({ isOpen, onClose }: NodeMakerProps) {
 
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center z-[9999] backdrop-blur-lg bg-black/50 animate-fadeIn"
+      className="fixed inset-0 flex items-center justify-center z-[9999] backdrop-blur-sm bg-black/20 animate-fadeIn"
       onClick={onClose}
     >
       <div
-        className="relative bg-[#0a0a0a] rounded-xl max-w-[75vw] max-h-[75vh] overflow-auto shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp min-w-[400px] min-h-[200px] sm:min-w-[90vw] sm:mx-4"
+        className="relative flex items-center justify-center flex-col bg-[#0a0a0a] rounded-xl max-w-[50vw] max-h-[75vh] overflow-auto animate-slideUp min-w-[400px] min-h-[200px] sm:min-w-[60vw]"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          className="absolute top-4 right-4 bg-transparent border-none text-white cursor-pointer p-2 flex items-center justify-center rounded transition-all duration-200 ease-in-out z-[1] hover:bg-white/10 active:scale-95"
-          onClick={onClose}
-          aria-label="Close modal"
-        >
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M18 6L6 18"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M6 6L18 18"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="w-full flex justify-end">
+          <X onClose={onClose} />
+        </div>
+
+        <form onSubmit={handleSubmit} className="w-7/8 space-y-4">
           <div>
             <label
               htmlFor="projectName"
@@ -132,7 +98,7 @@ export default function NodeMaker({ isOpen, onClose }: NodeMakerProps) {
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
               placeholder="Enter project name"
-              className="w-full px-4 py-2 bg-gray-800 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
+              className="w-full px-4 py-2 bg-neutral-800 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-red-800 transition-colors"
               disabled={isLoading}
               maxLength={100}
             />
@@ -151,7 +117,7 @@ export default function NodeMaker({ isOpen, onClose }: NodeMakerProps) {
               onChange={(e) => setProjectDescription(e.target.value)}
               placeholder="Enter project description (optional)"
               rows={4}
-              className="w-full px-4 py-2 bg-gray-800 text-white border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 transition-colors resize-none"
+              className="w-full px-4 py-2 bg-neutral-800 text-white border border-neutral-600 rounded-lg focus:outline-none focus:border-red-800 transition-colors resize-none"
               disabled={isLoading}
               maxLength={500}
             />
@@ -163,11 +129,11 @@ export default function NodeMaker({ isOpen, onClose }: NodeMakerProps) {
             </div>
           )}
 
-          <div className="flex gap-3 pt-4">
+          <div className="w-full flex gap-3 py-4">
             <button
               type="submit"
               disabled={isLoading || !projectName.trim()}
-              className="flex-1 px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 px-6 py-3 bg-neutral-200 text-red-900 font-semibold rounded-lg hover:bg-white disabled:bg-neutral-500 disabled:text-neutral-200 disabled:cursor-not-allowed transition-colors"
             >
               {isLoading ? (
                 <span className="flex items-center justify-center">
@@ -202,7 +168,7 @@ export default function NodeMaker({ isOpen, onClose }: NodeMakerProps) {
                 type="button"
                 onClick={onClose}
                 disabled={isLoading}
-                className="px-6 py-3 bg-gray-700 text-white font-medium rounded-lg hover:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+                className="px-6 py-3 bg-red-900 text-white font-semibold rounded-lg hover:bg-red-800 disabled:cursor-not-allowed transition-colors"
               >
                 Cancel
               </button>

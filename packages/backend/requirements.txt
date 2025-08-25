@@ -5,4 +5,3 @@ pydantic==2.10.3
 httpx==0.28.1
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-aiofiles==24.1.0

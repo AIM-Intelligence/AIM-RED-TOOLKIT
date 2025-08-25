@@ -34,11 +34,27 @@
     }
   }
 
+  @keyframes fadeOut {
+    0% {
+      opacity: 1;
+    }
+    75% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+
   .animate-fadeIn {
     animation: fadeIn 0.2s ease-out;
   }
 
   .animate-slideUp {
     animation: slideUp 0.3s ease-out;
+  }
+
+  .animate-fadeOut {
+    animation: fadeOut 2s ease-out forwards;
   }
 }

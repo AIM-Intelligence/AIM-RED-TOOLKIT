@@ -13,8 +13,6 @@ export interface NodeData {
   title: string;
   description?: string;
   file?: string;
-  // Additional fields that might be present in the data
-  code?: string; // Initial code for new nodes
 }
 
 export interface EdgeMarkerEnd {
@@ -40,6 +38,7 @@ export interface CodeExecutionRequest {
   code: string;
   language?: string; // Default: "python"
   timeout?: number; // Default: 30 seconds
+  project_id?: string; // Optional: uses project venv if provided
 }
 
 export interface CodeExecutionResponse {
@@ -156,7 +155,7 @@ export interface DeleteProjectResponse {
 export interface CreateNodeRequest {
   project_id: string;
   node_id: string;
-  node_type?: string; // Default: "default"
+  node_type?: string; // Default: "custom"
   position: Position;
   data: NodeData;
 }
@@ -204,6 +203,35 @@ export interface DeleteEdgeResponse {
   success: boolean;
   message: string;
 }
+
+// ==================== Flow Execution ====================
+
+// Execute Flow Request
+export interface ExecuteFlowRequest {
+  project_id: string;
+  start_node_id?: string;
+  params?: Record<string, unknown>;
+  max_workers?: number;
+  timeout_sec?: number;
+  halt_on_error?: boolean;
+}
+
+// Execute Flow Response
+export interface ExecuteFlowResponse {
+  success: boolean;
+  run_id: string;
+  execution_results: Record<string, {
+    status: 'success' | 'error' | 'skipped';
+    output?: unknown;
+    error?: string;
+    execution_time_ms?: number;
+    logs?: string;
+  }>;
+  result_nodes: Record<string, unknown>;
+  execution_order: string[];
+  total_execution_time_ms: number;
+}
+
 
 // ==================== Error Response ====================
 

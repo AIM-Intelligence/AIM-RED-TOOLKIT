@@ -17,3 +17,7 @@ node_modules
 dist
 build
 .venv
+
+# Exclude projects folder entirely - it will be mounted as volume
+packages/backend/projects/
+packages/backend/projects/**

@@ -9,35 +9,58 @@ def create_node(project_id: str, node_id: str, node_type: str, position: Dict[st
     
     project_path = get_project_path(project_id)
     
-    # Extract title from data for filename
-    node_title = data.get('title', f'node_{node_id}')
-    
-    # Create python file for the node
-    py_filename = f"{node_id}_{node_title}.py".replace(" ", "_").replace("/", "_")
-    py_filepath = project_path / py_filename
-    
-    # Create empty python file with basic template
-    initial_code = data.get('code', f"# Node: {node_title}\n# ID: {node_id}\n\n# Write your Python code here\nprint('Hello, World!')")
-    with open(py_filepath, 'w') as f:
-        f.write(initial_code)
-    
-    # Update project json
+    # Update project json first to check for existing nodes
     structure = get_project_structure(project_id)
     
     # Check if node already exists
     if any(node['id'] == node_id for node in structure['nodes']):
-        # Delete the created file if node already exists
-        py_filepath.unlink()
         raise ValueError(f"Node with ID '{node_id}' already exists")
+    
+    # Extract title from data for filename
+    node_title = data.get('title', f'node_{node_id}')
+    
+    # Only create Python file for custom nodes
+    # Start and Result nodes don't need code files
+    py_filename = None
+    if node_type == 'custom':
+        # Create python file for the node
+        py_filename = f"{node_id}_{node_title}.py".replace(" ", "_").replace("/", "__")
+        py_filepath = project_path / py_filename
+        
+        # Create empty python file with basic template
+        initial_code = f"""# Node: {node_title}
+# ID: {node_id}
+
+def main(input_data=None):
+    \"\"\"
+    Process input data and return result
+    
+    Args:
+        input_data: Data from previous node(s)
+    
+    Returns:
+        Processed data for next node
+    \"\"\"
+    # Your code here
+    if input_data:
+        return input_data
+    return None
+"""
+        with open(py_filepath, 'w') as f:
+            f.write(initial_code)
+    # Start and Result nodes don't need any Python file
     
     # Add new node with React Flow structure
     # Ensure data has required fields
     node_data = {
         "title": data.get('title', f'Node {node_id}'),
         "description": data.get('description', ''),
-        "file": py_filename,  # Add file reference to data
         **data  # Include any additional data fields
     }
+    
+    # Only add file reference if a file was created
+    if py_filename:
+        node_data["file"] = py_filename
     
     new_node = {
         "id": node_id,
@@ -159,4 +182,32 @@ def save_node_code(project_id: str, node_id: str, code: str) -> Dict[str, Any]:
         "success": True,
         "message": f"Code saved for node '{node_id}'",
         "file_path": str(py_filepath)
+    }
+
+def update_node_position(project_id: str, node_id: str, position: Dict[str, float]) -> Dict[str, Any]:
+    """Update node position in project structure"""
+    from .project_structure import get_project_structure, save_project_structure
+    
+    # Get current structure
+    structure = get_project_structure(project_id)
+    
+    # Find and update node position
+    node_found = False
+    for node in structure['nodes']:
+        if node['id'] == node_id:
+            node['position'] = position
+            node_found = True
+            break
+    
+    if not node_found:
+        raise ValueError(f"Node with ID '{node_id}' not found")
+    
+    # Save updated structure
+    save_project_structure(project_id, structure)
+    
+    return {
+        "success": True,
+        "message": f"Position updated for node '{node_id}'",
+        "node_id": node_id,
+        "position": position
     }

@@ -15,7 +15,7 @@ export default function RunCodeButton() {
   return (
     <button
       onClick={handleRunCode}
-      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 hover:cursor-pointer  transition-colors duration-200 flex items-center gap-2"
+      className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 hover:cursor-pointer  transition-colors duration-200 flex items-center gap-2"
       aria-label="Run code"
     >
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">

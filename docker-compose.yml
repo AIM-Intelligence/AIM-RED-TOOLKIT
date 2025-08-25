@@ -1,25 +1,64 @@
 services:
   backend:
     build:
-      context: .
-      dockerfile: ./packages/backend/Dockerfile
+      context: ./packages/backend
+      dockerfile: Dockerfile
     container_name: aim-red-backend
     ports:
       - "8000:8000"
     volumes:
-      # Mount only the source code for hot-reload
-      - ./packages/backend/app:/app/app
-      # Mount the projects directory for persistent storage
-      - ./packages/backend/projects:/app/projects
+      # Mount source code for hot-reload
+      - ./packages/backend/app:/app/app:delegated
+      # Mount projects directory for persistent storage (metadata only)
+      - ./packages/backend/projects:/app/projects:delegated
     environment:
       - PYTHONUNBUFFERED=1
+      - DEVELOPMENT=true
+      - EXECUTOR_URL=http://executor:8001
     networks:
       - aim-red-network
+    depends_on:
+      - executor
+    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  executor:
+    build:
+      context: ./packages/executor
+      dockerfile: Dockerfile
+    container_name: aim-red-executor
+    ports:
+      - "8001:8001"
+    volumes:
+      # Mount source code
+      - ./packages/executor/app:/app/app:delegated
+      # Mount projects directory for venvs and code
+      - executor-projects:/app/projects:delegated
+      # Mount LSP logs directory
+      - lsp-logs:/var/log/aim-red/lsp
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DEVELOPMENT=true
+      # LSP Configuration
+      - LSP_LOG_LEVEL=INFO
+      - LSP_STDIO_LOG_DIR=/var/log/aim-red/lsp
+      - LSP_IDLE_TTL_MS=600000
+      - LSP_MAX_RESTARTS=5
+      - LSP_RESTART_WINDOW_MS=60000
+    networks:
+      - aim-red-network
+    command: ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   frontend:
     build:
@@ -29,16 +68,33 @@ services:
     ports:
       - "5173:5173"
     volumes:
-      - ./packages/frontend:/app/packages/frontend
-      - /app/packages/frontend/node_modules
-      - /app/node_modules
+      # Use named volumes for node_modules
+      - frontend-node-modules:/app/node_modules
+      - frontend-pkg-node-modules:/app/packages/frontend/node_modules
     environment:
       - VITE_API_URL=http://backend:8000
+      - VITE_EXECUTOR_URL=http://executor:8001
+      - NODE_OPTIONS=--max-old-space-size=4096
     depends_on:
       - backend
     networks:
       - aim-red-network
+    stdin_open: true
+    tty: true
+    command: >
+      sh -c "cd /app/packages/frontend &&
+             pnpm dev --host 0.0.0.0"
 
 networks:
   aim-red-network:
     driver: bridge
+
+volumes:
+  lsp-logs:
+    driver: local
+  executor-projects:
+    driver: local
+  frontend-node-modules:
+    driver: local
+  frontend-pkg-node-modules:
+    driver: local

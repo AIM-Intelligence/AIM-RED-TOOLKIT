@@ -15,16 +15,16 @@ import type {
   CreateEdgeResponse,
   DeleteEdgeRequest,
   DeleteEdgeResponse,
-  CodeExecutionRequest,
-  CodeExecutionResponse,
   GetNodeCodeRequest,
   GetNodeCodeResponse,
   SaveNodeCodeRequest,
   SaveNodeCodeResponse,
+  ExecuteFlowRequest,
+  ExecuteFlowResponse,
   ErrorResponse,
 } from "../types";
 
-const API_BASE_URL = process.env.VITE_API_URL;
+const API_BASE_URL = "/api";
 
 // Helper function for API calls
 async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -93,6 +93,23 @@ export const projectApi = {
     });
   },
 
+  // Update node position
+  async updateNodePosition(data: {
+    project_id: string;
+    node_id: string;
+    position: { x: number; y: number };
+  }): Promise<{
+    success: boolean;
+    message: string;
+    node_id: string;
+    position: { x: number; y: number };
+  }> {
+    return apiCall("/project/updatenode/position", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
   // Create edge
   async createEdge(data: CreateEdgeRequest): Promise<CreateEdgeResponse> {
     return apiCall<CreateEdgeResponse>("/project/makeedge", {
@@ -108,20 +125,47 @@ export const projectApi = {
       body: JSON.stringify(data),
     });
   },
+
+  // Execute flow
+  async executeFlow(data: ExecuteFlowRequest): Promise<ExecuteFlowResponse> {
+    return apiCall<ExecuteFlowResponse>("/project/execute-flow", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+
+  // Check venv status with detailed progress
+  async getVenvStatus(projectId: string): Promise<{
+    success: boolean;
+    project_id: string;
+    venv_ready: boolean;
+    status?: string;
+    progress?: number;
+    message?: string;
+    error?: string;
+    current_package?: string;
+  }> {
+    return apiCall(`/project/${projectId}/venv-status`);
+  },
+
+  // Create venv for a project
+  async createVenv(projectId: string): Promise<{
+    success: boolean;
+    message?: string;
+    status?: string;
+  }> {
+    return apiCall(`/executor/venv/create`, {
+      method: "POST",
+      body: JSON.stringify({ project_id: projectId }),
+    });
+  },
+
 };
 
 // ==================== Code APIs ====================
 
 export const codeApi = {
-  // Execute code
-  async executeCode(
-    data: CodeExecutionRequest
-  ): Promise<CodeExecutionResponse> {
-    return apiCall<CodeExecutionResponse>("/code/execute", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
 
   // Get node code
   async getNodeCode(data: GetNodeCodeRequest): Promise<GetNodeCodeResponse> {
@@ -138,6 +182,27 @@ export const codeApi = {
       body: JSON.stringify(data),
     });
   },
+
+  // Execute single node
+  async executeNode(data: {
+    project_id: string;
+    node_id: string;
+    input_data?: Record<string, unknown>;
+  }): Promise<{
+    success: boolean;
+    output?: unknown;
+    error?: string;
+    traceback?: string;
+    output_raw?: string;
+    node_id: string;
+  }> {
+    return apiCall("/code/execute-node", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+
 };
 
 // Export all API functions
