@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -22,6 +20,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 20s
 
   frontend:
     build:
@@ -41,3 +40,4 @@ services:
 networks:
   aim-red-network:
     driver: bridge
+

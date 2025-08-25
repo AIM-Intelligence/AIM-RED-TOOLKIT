@@ -1,8 +1,10 @@
 import json
+import os
 from pathlib import Path
 from typing import List, Dict, Any
 
-PROJECTS_BASE_PATH = Path("projects")
+# Get absolute path to projects directory
+PROJECTS_BASE_PATH = Path(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))) / "projects"
 PROJECTS_REGISTRY_FILE = PROJECTS_BASE_PATH / "projects.json"
 
 def ensure_projects_registry() -> None:

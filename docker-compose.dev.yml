@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: ./packages/backend/Dockerfile
-    container_name: aim-red-backend
+    container_name: aim-red-backend-dev
     ports:
       - "8000:8000"
     volumes:
@@ -15,17 +15,8 @@ services:
       - PYTHONUNBUFFERED=1
       - DEVELOPMENT=true
     networks:
-      - aim-red-network
-    command:
-      [
-        "uvicorn",
-        "app.main:app",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8000",
-        "--reload",
-      ]
+      - aim-red-network-dev
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 15s
@@ -37,7 +28,7 @@ services:
     build:
       context: .
       dockerfile: ./packages/frontend/Dockerfile
-    container_name: aim-red-frontend
+    container_name: aim-red-frontend-dev
     ports:
       - "5173:5173"
     volumes:
@@ -56,11 +47,11 @@ services:
     depends_on:
       - backend
     networks:
-      - aim-red-network
+      - aim-red-network-dev
     stdin_open: true
     tty: true
 
 networks:
-  aim-red-network:
+  aim-red-network-dev:
     driver: bridge
 

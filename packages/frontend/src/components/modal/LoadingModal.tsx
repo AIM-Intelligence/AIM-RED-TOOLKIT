@@ -1,9 +1,11 @@
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface Notice {
   loading: string;
   success: string;
   error: string;
+  errorDetails?: string;
 }
 
 interface LoadingModalProps {
@@ -20,7 +22,7 @@ export default function LoadingModal({
   notice,
 }: LoadingModalProps) {
   useEffect(() => {
-    if (isOpen && status !== "loading") {
+    if (isOpen && status === "success") {
       const timer = setTimeout(() => {
         onClose();
       }, 2000);
@@ -40,13 +42,17 @@ export default function LoadingModal({
     }
   };
 
-  return (
+  const modalContent = (
     <div
       className="fixed inset-0 flex items-center justify-center z-[10000] backdrop-blur-sm bg-black/30 animate-fadeIn"
       onClick={handleBackgroundClick}
     >
       <div
-        className="bg-gray-900 rounded-xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp"
+        className={`bg-neutral-900 rounded-xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp ${
+          status === "error" && notice.errorDetails
+            ? "max-w-2xl max-h-[80vh] overflow-auto"
+            : ""
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {status === "loading" && (
@@ -102,12 +108,33 @@ export default function LoadingModal({
                 />
               </svg>
             </div>
-            <span className="text-white text-lg font-semibold">
+            <span className="text-white text-lg font-semibold mb-4">
               {notice.error}
             </span>
+            {notice.errorDetails && (
+              <div className="w-full">
+                <div className="border-t border-neutral-700 mt-2 pt-4">
+                  <p className="text-neutral-400 text-sm mb-2 font-semibold">
+                    Error Details:
+                  </p>
+                  <pre className="bg-black/50 rounded-lg p-4 text-xs text-neutral-300 overflow-x-auto whitespace-pre-wrap break-words">
+                    {notice.errorDetails}
+                  </pre>
+                </div>
+                <button
+                  onClick={onClose}
+                  className="mt-4 w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
     </div>
   );
+
+  // Use portal to render modal at document root level
+  return createPortal(modalContent, document.body);
 }

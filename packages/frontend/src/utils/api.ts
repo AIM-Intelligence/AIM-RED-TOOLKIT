@@ -21,10 +21,14 @@ import type {
   GetNodeCodeResponse,
   SaveNodeCodeRequest,
   SaveNodeCodeResponse,
+  ExecuteFlowRequest,
+  ExecuteFlowResponse,
+  AnalyzeFlowRequest,
+  AnalyzeFlowResponse,
   ErrorResponse,
 } from "../types";
 
-const API_BASE_URL = process.env.VITE_API_URL;
+const API_BASE_URL = "/api";
 
 // Helper function for API calls
 async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
@@ -93,6 +97,23 @@ export const projectApi = {
     });
   },
 
+  // Update node position
+  async updateNodePosition(data: {
+    project_id: string;
+    node_id: string;
+    position: { x: number; y: number };
+  }): Promise<{
+    success: boolean;
+    message: string;
+    node_id: string;
+    position: { x: number; y: number };
+  }> {
+    return apiCall("/project/updatenode/position", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
   // Create edge
   async createEdge(data: CreateEdgeRequest): Promise<CreateEdgeResponse> {
     return apiCall<CreateEdgeResponse>("/project/makeedge", {
@@ -105,6 +126,22 @@ export const projectApi = {
   async deleteEdge(data: DeleteEdgeRequest): Promise<DeleteEdgeResponse> {
     return apiCall<DeleteEdgeResponse>("/project/deleteedge", {
       method: "DELETE",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Execute flow
+  async executeFlow(data: ExecuteFlowRequest): Promise<ExecuteFlowResponse> {
+    return apiCall<ExecuteFlowResponse>("/project/execute-flow", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Analyze flow
+  async analyzeFlow(data: AnalyzeFlowRequest): Promise<AnalyzeFlowResponse> {
+    return apiCall<AnalyzeFlowResponse>("/project/analyze-flow", {
+      method: "POST",
       body: JSON.stringify(data),
     });
   },
@@ -138,6 +175,26 @@ export const codeApi = {
       body: JSON.stringify(data),
     });
   },
+
+  // Execute single node
+  async executeNode(data: {
+    project_id: string;
+    node_id: string;
+    input_data?: Record<string, unknown>;
+  }): Promise<{
+    success: boolean;
+    output?: unknown;
+    error?: string;
+    traceback?: string;
+    output_raw?: string;
+    node_id: string;
+  }> {
+    return apiCall("/code/execute-node", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
 };
 
 // Export all API functions

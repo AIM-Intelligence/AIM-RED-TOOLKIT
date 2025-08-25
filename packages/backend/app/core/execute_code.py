@@ -2,14 +2,17 @@ import subprocess
 import tempfile
 import os
 import sys
+from typing import Optional
 
-def execute_python_code(code: str, timeout: int = 30) -> dict:
+def execute_python_code(code: str, timeout: int = 30, python_executable: Optional[str] = None, working_dir: Optional[str] = None) -> dict:
     """
     Execute Python code in a secure temporary environment
     
     Args:
         code: Python code to execute
         timeout: Maximum execution time in seconds
+        python_executable: Optional path to Python executable (for venv)
+        working_dir: Optional working directory for execution
         
     Returns:
         Dictionary with output, error, and exit_code
@@ -20,11 +23,15 @@ def execute_python_code(code: str, timeout: int = 30) -> dict:
             temp_file_path = temp_file.name
         
         try:
+            # Use provided Python executable or system default
+            python_exe = python_executable if python_executable else sys.executable
+            
             result = subprocess.run(
-                [sys.executable, temp_file_path],
+                [python_exe, temp_file_path],
                 capture_output=True,
                 text=True,
-                timeout=timeout
+                timeout=timeout,
+                cwd=working_dir  # Set working directory if provided
             )
             
             return {
