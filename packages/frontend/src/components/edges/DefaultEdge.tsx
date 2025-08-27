@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   BaseEdge,
   EdgeLabelRenderer,
-  getSmoothStepPath,
+  getBezierPath,
   type EdgeProps,
 } from "@xyflow/react";
 
@@ -19,7 +19,7 @@ export default function DefaultEdge({
 }: EdgeProps) {
   const [isHovered, setIsHovered] = useState(false);
 
-  const [edgePath, labelX, labelY] = getSmoothStepPath({
+  const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,

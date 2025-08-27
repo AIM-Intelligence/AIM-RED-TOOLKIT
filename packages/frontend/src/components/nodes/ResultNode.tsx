@@ -127,8 +127,8 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
       <div
         ref={nodeRef}
         className={clsx(
-          "bg-neutral-900 rounded-lg border border-neutral-600 relative flex flex-col",
-          "overflow-hidden select-none",
+          "bg-neutral-900 rounded-lg border border-neutral-600 relative",
+          "select-none",
           hovering && !isResizing && "border-neutral-400",
           isResizing && "shadow-xl border-blue-500"
         )}
@@ -139,19 +139,21 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
         onMouseEnter={() => setHovering(true)}
         onMouseLeave={() => setHovering(false)}
       >
-        {/* 삭제 버튼 */}
-        {hovering && (
-          <button
-            onClick={handleDelete}
-            className="absolute top-2 right-2 w-5 h-5 bg-red-500/80 text-white rounded flex items-center justify-center text-xs hover:bg-red-600 transition-colors z-10"
-          >
-            ✕
-          </button>
-        )}
+        {/* Inner container with overflow control */}
+        <div className="flex flex-col h-full overflow-hidden rounded-lg">
+          {/* 삭제 버튼 */}
+          {hovering && (
+            <button
+              onClick={handleDelete}
+              className="absolute top-2 right-2 w-5 h-5 bg-red-500/80 text-white rounded flex items-center justify-center text-xs hover:bg-red-600 transition-colors z-10"
+            >
+              ✕
+            </button>
+          )}
 
-        {/* Output display area - takes most of the space */}
-        <div 
-          className="flex-1 p-3 overflow-auto nowheel"
+          {/* Output display area - takes most of the space */}
+          <div 
+            className="flex-1 p-3 overflow-auto nowheel"
           tabIndex={0}
           onMouseDown={(e) => {
             e.stopPropagation();
@@ -172,17 +174,18 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
           )}
         </div>
 
-        {/* Download button - small and at the bottom */}
-        {hasResult && (
-          <div className="border-t border-neutral-700 p-2">
-            <button
-              className="text-xs px-2 py-1 bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white rounded transition-colors w-full"
-              onClick={handleGetResult}
-            >
-              Download
-            </button>
-          </div>
-        )}
+          {/* Download button - small and at the bottom */}
+          {hasResult && (
+            <div className="border-t border-neutral-700 p-2">
+              <button
+                className="text-xs px-2 py-1 bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white rounded transition-colors w-full"
+                onClick={handleGetResult}
+              >
+                Download
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Resize handle */}
         <div
@@ -220,11 +223,13 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
         <Handle
           type="target"
           position={Position.Left}
-          className="w-3 h-3"
+          className="w-3 h-3 bg-gray-500 border-2 border-gray-400"
           style={{
             left: -6,
             top: '50%',
             transform: 'translateY(-50%)',
+            background: '#6b7280',
+            border: '2px solid #9ca3af',
           }}
         />
       </div>
