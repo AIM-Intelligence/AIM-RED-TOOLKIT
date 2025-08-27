@@ -13,28 +13,24 @@ const BUTTON_WIDTH = 35;       // 세로 버튼 가로 폭
 const BORDER_WIDTH = 2;        // tailwind border-2
 
 /** 세로 레이아웃 */
-const TOP_BOTTOM_PADDING = 10;    // 노드 위아래 패딩
-const PORT_SPACING = 25;          // 포트 간 간격
+const TOP_BOTTOM_PADDING = 10; // 노드 위아래 패딩
+const PORT_SPACING = 25;       // 포트 간 "센터 간격"
 
 /** ===== Text metrics (text-xs + font-mono 가정) ===== */
 const TEXT_FONT_PX = 12;       // text-xs ~ 12px
 const TEXT_LINE_H = 16;        // tailwind 기본 line-height(approx)
 const TEXT_DESCENDER_PAD = 2;  // y/g/p 디센더 여유
 
-/** ===== Handle (dot) =====
- * - DOT_RADIUS: 보이는 점 반지름(px)
- * - DOT_DIAM: 보이는 점 지름
- * - HANDLE_HITBOX_DIAM: 클릭 히트박스 지름(필요시 DOT_DIAM보다 크게)
- * - HANDLE_OUTER_OFFSET: 박스 바깥 고정 간격(보이는 점 기준)
- */
-const DOT_RADIUS = 3;                           // ★ 점 반지름(px)
-const DOT_DIAM = DOT_RADIUS * 2;                // 보이는 점 지름
-const HANDLE_HITBOX_DIAM = DOT_DIAM;            // 히트박스(=Handle width/height)
-const HANDLE_GAP = 12;                           // 박스 바깥 간격
+/** ===== Handle (dot) ===== */
+const DOT_RADIUS = 3;
+const DOT_DIAM = DOT_RADIUS * 2;
+const HANDLE_HITBOX_DIAM = DOT_DIAM;
+const HANDLE_GAP = 12;
 const HANDLE_OUTER_OFFSET = BORDER_WIDTH + HANDLE_GAP + DOT_DIAM;
 
-/** 라벨/행 높이: 텍스트 기준 + 여유 vs 점 지름 중 더 큰 값 */
+/** 행 높이(라벨 박스) + 간격(센터 간격 유지용) */
 const ROW_H = Math.max(TEXT_LINE_H + TEXT_DESCENDER_PAD, DOT_DIAM);
+const ROW_GAP = Math.max(0, PORT_SPACING - ROW_H); // => ROW_H + ROW_GAP = PORT_SPACING
 
 export default function DefaultNode(props: NodeProps & { data: NodeData }) {
   const [hovering, setHovering] = useState(false);
@@ -50,7 +46,7 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
     resultData: undefined,
   });
 
-  /** 실제 폰트 폭으로 라벨 너비 측정 (text-xs + font-mono 기준) */
+  /** 실제 폰트 폭으로 라벨 너비 측정 */
   const [inW, setInW] = useState(0);
   const [outW, setOutW] = useState(0);
 
@@ -74,40 +70,28 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
     } else setOutW(0);
   }, [props.data.inputs, props.data.outputs]);
 
-  /** 콘텐츠 가로폭: PAD1 + inW + PAD2 + BUTTON + PAD2 + outW + PAD1 */
+  /** 가로폭 계산 */
   const contentWidth = useMemo(() => {
     return PAD1 + inW + PAD2 + BUTTON_WIDTH + PAD2 + outW + PAD1;
   }, [inW, outW]);
 
-  /** 노드 가로폭 = 콘텐츠폭 + 좌우 보더 */
   const nodeWidth = useMemo(() => {
     return contentWidth + 2 * BORDER_WIDTH;
   }, [contentWidth]);
 
-  /** 세로 높이 계산(포트 개수에 맞춰) */
+  /** 세로 높이: 좌/우 중 더 많은 쪽의 행 수를 기준 */
+  const ic = props.data.inputs?.length || 0;
+  const oc = props.data.outputs?.length || 0;
+  const totalRows = Math.max(ic, oc, 1);
+
   const nodeHeight = useMemo(() => {
-    const ic = props.data.inputs?.length || 0;
-    const oc = props.data.outputs?.length || 0;
-    const n = Math.max(ic, oc, 1);
-    // 포트 개수 × 간격 + 위아래 패딩
-    const portsHeight = n * PORT_SPACING;
+    // 내부 포트 영역 높이 = totalRows * (ROW_H + ROW_GAP) - 마지막 행 뒤 gap은 없음
+    // 하지만 flex+gap으로 가운데 정렬할 때 '총 센터 간격'을 PORT_SPACING로 맞추려면
+    // 전체 높이를 top/bottom padding + totalRows * PORT_SPACING로 두면 시각적으로 정확.
+    const portsHeight = totalRows * PORT_SPACING;
     const innerContentH = TOP_BOTTOM_PADDING * 2 + portsHeight;
     return innerContentH + 2 * BORDER_WIDTH;
-  }, [props.data.inputs, props.data.outputs]);
-
-  /** 포트 Y 중심(노드 컨테이너 기준, BORDER 포함 좌표계) */
-  const getPortCenterY = (index: number, total: number) => {
-    const contentTop = BORDER_WIDTH + TOP_BOTTOM_PADDING;
-    if (total <= 1) {
-      // 포트가 1개일 때는 중앙에
-      const innerH = nodeHeight - 2 * BORDER_WIDTH;
-      return Math.round(BORDER_WIDTH + innerH / 2);
-    }
-    // 여러 개일 때는 균등 배치
-    const spacing = PORT_SPACING;
-    const startY = contentTop + spacing / 2;
-    return Math.round(startY + index * spacing);
-  };
+  }, [totalRows]);
 
   const handleNodeClick = () => props.data.viewCode?.();
 
@@ -153,7 +137,7 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
         style={{
           width: `${nodeWidth}px`,
           height: `${nodeHeight}px`,
-          overflow: "visible", // 핸들이 밖으로 나와도 보이도록
+          overflow: "visible",
         }}
         onMouseEnter={() => setHovering(true)}
         onMouseLeave={() => setHovering(false)}
@@ -177,8 +161,8 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
             transform: "translateX(-50%)",
           }}
         >
-          {/* ===== 입력 라벨/핸들 ===== */}
-          {props.data.inputs?.length ? (
+          {/* ===== 입력 라벨/핸들 (순수 CSS 수직 중앙) ===== */}
+          {ic ? (
             <div
               className="absolute"
               style={{
@@ -186,50 +170,45 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
                 width: `${inW}px`,
                 top: 0,
                 bottom: 0,
+                paddingTop: `${TOP_BOTTOM_PADDING}px`,
+                paddingBottom: `${TOP_BOTTOM_PADDING}px`,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                gap: `${ROW_GAP}px`,
               }}
             >
-              {props.data.inputs.map((input, idx) => {
-                const cy = getPortCenterY(idx, props.data.inputs!.length); // 중심 Y
-                return (
-                  <div key={`in-row-${input.id}`}>
-                    {/* 라벨 행 */}
-                    <div
-                      className="absolute"
-                      style={{
-                        left: 0,
-                        right: 0,
-                        top: `${cy}px`,
-                        transform: "translateY(-50%)",
-                        height: `${ROW_H}px`,
-                      }}
-                    >
-                      <div
-                        className="h-full flex items-center justify-end text-xs text-neutral-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={{ lineHeight: `${TEXT_LINE_H}px` }}
-                      >
-                        {input.label}
-                      </div>
-                    </div>
-
-                    {/* 핸들(점) */}
-                    <Handle
-                      key={`h-in-${input.id}`}
-                      type="target"
-                      position={Position.Left}
-                      id={input.id}
-                      style={{
-                        left: -HANDLE_OUTER_OFFSET,
-                        top: `${cy}px`,
-                        transform: "translateY(-50%)",
-                        width: `${HANDLE_HITBOX_DIAM}px`,
-                        height: `${HANDLE_HITBOX_DIAM}px`,
-                        borderRadius: "9999px",
-                      }}
-                      title={`${input.label} (${input.type})${input.required ? " *" : ""}`}
-                    />
+              {props.data.inputs!.map((input) => (
+                <div
+                  key={`in-row-${input.id}`}
+                  className="relative"
+                  style={{ height: `${ROW_H}px` }}
+                >
+                  {/* 라벨 */}
+                  <div
+                    className="absolute inset-0 flex items-center justify-end text-xs text-neutral-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
+                    style={{ lineHeight: `${TEXT_LINE_H}px` }}
+                  >
+                    {input.label}
                   </div>
-                );
-              })}
+
+                  {/* 핸들(점) : 행 기준 중앙 */}
+                  <Handle
+                    type="target"
+                    position={Position.Left}
+                    id={input.id}
+                    style={{
+                      left: -HANDLE_OUTER_OFFSET,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      width: `${HANDLE_HITBOX_DIAM}px`,
+                      height: `${HANDLE_HITBOX_DIAM}px`,
+                      borderRadius: "9999px",
+                    }}
+                    title={`${input.label} (${input.type})${input.required ? " *" : ""}`}
+                  />
+                </div>
+              ))}
             </div>
           ) : null}
 
@@ -252,8 +231,8 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
             {props.data.title || "Node"}
           </button>
 
-          {/* ===== 출력 라벨/핸들 ===== */}
-          {props.data.outputs?.length ? (
+          {/* ===== 출력 라벨/핸들 (순수 CSS 수직 중앙) ===== */}
+          {oc ? (
             <div
               className="absolute"
               style={{
@@ -261,54 +240,49 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
                 width: `${outW}px`,
                 top: 0,
                 bottom: 0,
+                paddingTop: `${TOP_BOTTOM_PADDING}px`,
+                paddingBottom: `${TOP_BOTTOM_PADDING}px`,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                gap: `${ROW_GAP}px`,
               }}
             >
-              {props.data.outputs.map((output, idx) => {
-                const cy = getPortCenterY(idx, props.data.outputs!.length);
-                return (
-                  <div key={`out-row-${output.id}`}>
-                    <div
-                      className="absolute"
-                      style={{
-                        left: 0,
-                        right: 0,
-                        top: `${cy}px`,
-                        transform: "translateY(-50%)",
-                        height: `${ROW_H}px`,
-                      }}
-                    >
-                      <div
-                        className="h-full flex items-center justify-start text-xs text-neutral-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
-                        style={{ lineHeight: `${TEXT_LINE_H}px` }}
-                      >
-                        {output.label}
-                      </div>
-                    </div>
-
-                    <Handle
-                      key={`h-out-${output.id}`}
-                      type="source"
-                      position={Position.Right}
-                      id={output.id}
-                      style={{
-                        right: -HANDLE_OUTER_OFFSET,
-                        top: `${cy}px`,
-                        transform: "translateY(-50%)",
-                        width: `${HANDLE_HITBOX_DIAM}px`,
-                        height: `${HANDLE_HITBOX_DIAM}px`,
-                        borderRadius: "9999px",
-                      }}
-                      title={`${output.label} (${output.type})`}
-                    />
+              {props.data.outputs!.map((output) => (
+                <div
+                  key={`out-row-${output.id}`}
+                  className="relative"
+                  style={{ height: `${ROW_H}px` }}
+                >
+                  <div
+                    className="absolute inset-0 flex items-center justify-start text-xs text-neutral-300 font-mono whitespace-nowrap overflow-hidden text-ellipsis"
+                    style={{ lineHeight: `${TEXT_LINE_H}px` }}
+                  >
+                    {output.label}
                   </div>
-                );
-              })}
+
+                  <Handle
+                    type="source"
+                    position={Position.Right}
+                    id={output.id}
+                    style={{
+                      right: -HANDLE_OUTER_OFFSET,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      width: `${HANDLE_HITBOX_DIAM}px`,
+                      height: `${HANDLE_HITBOX_DIAM}px`,
+                      borderRadius: "9999px",
+                    }}
+                    title={`${output.label} (${output.type})`}
+                  />
+                </div>
+              ))}
             </div>
           ) : null}
         </div>
 
         {/* ====== 입력/출력 포트가 0개일 때 중앙 핸들 ====== */}
-        {!props.data.inputs?.length && (
+        {!ic && (
           <Handle
             type="target"
             position={Position.Left}
@@ -323,7 +297,7 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
           />
         )}
 
-        {!props.data.outputs?.length && (
+        {!oc && (
           <Handle
             type="source"
             position={Position.Right}
