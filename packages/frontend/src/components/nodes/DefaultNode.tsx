@@ -49,6 +49,7 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
   /** 실제 폰트 폭으로 라벨 너비 측정 */
   const [inW, setInW] = useState(0);
   const [outW, setOutW] = useState(0);
+  const [titleW, setTitleW] = useState(0);
 
   useLayoutEffect(() => {
     const canvas = document.createElement("canvas");
@@ -68,7 +69,11 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
     if (props.data.outputs?.length) {
       setOutW(Math.max(30, ...props.data.outputs.map(o => measure(o.label))));
     } else setOutW(0);
-  }, [props.data.inputs, props.data.outputs]);
+    
+    // Measure title width
+    const title = props.data.title || "Node";
+    setTitleW(measure(title));
+  }, [props.data.inputs, props.data.outputs, props.data.title]);
 
   /** 가로폭 계산 */
   const contentWidth = useMemo(() => {
@@ -85,13 +90,17 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
   const totalRows = Math.max(ic, oc, 1);
 
   const nodeHeight = useMemo(() => {
-    // 내부 포트 영역 높이 = totalRows * (ROW_H + ROW_GAP) - 마지막 행 뒤 gap은 없음
-    // 하지만 flex+gap으로 가운데 정렬할 때 '총 센터 간격'을 PORT_SPACING로 맞추려면
-    // 전체 높이를 top/bottom padding + totalRows * PORT_SPACING로 두면 시각적으로 정확.
+    // 포트 기반 높이 계산
     const portsHeight = totalRows * PORT_SPACING;
-    const innerContentH = TOP_BOTTOM_PADDING * 2 + portsHeight;
-    return innerContentH + 2 * BORDER_WIDTH;
-  }, [totalRows]);
+    const portBasedHeight = TOP_BOTTOM_PADDING * 2 + portsHeight + 2 * BORDER_WIDTH;
+    
+    // 타이틀 기반 높이 계산 (세로 버튼이므로 타이틀 너비가 버튼 높이가 됨)
+    // 버튼 양쪽에 여유 공간 추가
+    const titleBasedHeight = titleW + 32 + 2 * BORDER_WIDTH; // 32px for padding
+    
+    // 둘 중 더 큰 값 사용
+    return Math.max(portBasedHeight, titleBasedHeight);
+  }, [totalRows, titleW]);
 
   const handleNodeClick = () => props.data.viewCode?.();
 
@@ -146,7 +155,7 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
         {hovering && (
           <button
             onClick={handleDelete}
-            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors z-10"
+            className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors z-10"
           >
             ✕
           </button>
@@ -214,14 +223,14 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
 
           {/* 가운데 세로 버튼 */}
           <button
-            className="absolute text-xs bg-red-800 text-white px-1 py-2 rounded hover:bg-red-900 transition-colors hover:cursor-pointer"
+            className="absolute text-xs bg-red-800 text-white px-2 py-1 rounded hover:bg-red-900 transition-colors hover:cursor-pointer flex items-center justify-center"
             style={{
-              writingMode: "vertical-rl",
-              width: `${BUTTON_WIDTH}px`,
-              minHeight: "60px",
+              width: `${nodeHeight-16}px`,
+              height: `${BUTTON_WIDTH}px`,
               left: `${buttonCenterLeft}px`,
               top: "50%",
-              transform: "translate(-50%, -50%)",
+              transform: "translate(-50%, -50%) rotate(-90deg)",
+              transformOrigin: "center",
             }}
             onClick={(e) => {
               e.stopPropagation();
