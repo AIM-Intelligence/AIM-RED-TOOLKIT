@@ -32,6 +32,7 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
   const setExecutionResults = useExecutionStore(
     (state) => state.setExecutionResults
   );
+  const setToastMessage = useExecutionStore((state) => state.setToastMessage);
 
   const handleRunFlow = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -78,12 +79,19 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
         const nodeCount = result.execution_order?.length || 0;
         const timeMs = result.total_execution_time_ms || 0;
 
+        // 성공 시 모달 닫고 Toast 표시
         setModalState({
-          isOpen: true,
+          isOpen: false,
           status: "success",
-          message: `Flow executed successfully! (${nodeCount} nodes in ${timeMs}ms)`,
+          message: "",
           errorDetails: undefined,
         });
+        
+        // Toast 메시지 표시
+        setToastMessage(`✅ Flow executed successfully! (${nodeCount} nodes in ${timeMs}ms)`);
+        setTimeout(() => setToastMessage(null), 3000); // 3초 후 자동으로 사라짐
+        
+        console.log(`Flow executed successfully! (${nodeCount} nodes in ${timeMs}ms)`);
 
         console.log("Flow execution completed:", result);
       } else {
@@ -142,6 +150,8 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
 
   return (
     <>
+      
+      {/* Error modal only */}
       <LoadingModal
         isOpen={modalState.isOpen}
         status={modalState.status}

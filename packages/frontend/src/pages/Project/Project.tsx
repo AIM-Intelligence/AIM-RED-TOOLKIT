@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import IdeModal from "../../components/modal/Ide";
 import Loading from "../../components/loading/Loading";
@@ -11,9 +11,12 @@ import { useNodeOperations } from "../../hooks/useNodeOperations";
 import { useEdgeOperations } from "../../hooks/useEdgeOperations";
 import { type ComponentTemplate } from "../../config/componentLibrary";
 import { codeApi } from "../../utils/api";
+import { useExecutionStore } from "../../stores/executionStore";
 
 export default function Project() {
   const { projectId } = useParams<{ projectId: string }>();
+  const toastMessage = useExecutionStore((state) => state.toastMessage);
+  const setToastMessage = useExecutionStore((state) => state.setToastMessage);
 
   // UI State
   const [isIdeModalOpen, setIsIdeModalOpen] = useState(false);
@@ -25,6 +28,16 @@ export default function Project() {
     title: "Python IDE",
   });
   const [nodeIdCounter, setNodeIdCounter] = useState(1);
+
+  // Auto-dismiss toast after 3 seconds
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage, setToastMessage]);
 
   // Handle node click
   const handleNodeClick = useCallback((nodeId: string, title: string) => {
@@ -70,22 +83,10 @@ export default function Project() {
     nodes,
   });
 
-  // Check if there's already a start node
-  const hasStartNode = useMemo(() => {
-    return nodes.some((node) => node.type === "start");
-  }, [nodes]);
-
-
   // Handle component library selection
   const handleComponentSelect = useCallback(
     async (component: ComponentTemplate) => {
       if (!projectId) return;
-
-      // Check if trying to add a second start node
-      if (component.nodeType === "start" && hasStartNode) {
-        alert("Only one Start node is allowed per flow");
-        return;
-      }
 
       // Generate new node ID
       const newNodeId = String(nodeIdCounter);
@@ -181,7 +182,7 @@ export default function Project() {
         console.error("Error creating node from template:", error);
       }
     },
-    [projectId, nodeIdCounter, addNewNode, hasStartNode]
+    [projectId, nodeIdCounter, addNewNode]
   );
 
   // Handle retry
@@ -204,6 +205,24 @@ export default function Project() {
 
   return (
     <>
+      {/* Toast notification - Global */}
+      {toastMessage && (
+        <div 
+          className="fixed top-6 left-1/2 z-[9999] transition-all duration-300"
+          style={{
+            transform: 'translateX(-50%)',
+            animation: 'fadeInSlide 0.3s ease-out',
+          }}
+        >
+          <div className="bg-neutral-900/95 backdrop-blur-sm text-white px-5 py-3 rounded-lg shadow-lg flex items-center gap-2.5 border border-neutral-800">
+            <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+            </svg>
+            <span className="text-sm font-medium text-neutral-100">{toastMessage.replace('✅ ', '')}</span>
+          </div>
+        </div>
+      )}
+      
       <ProjectFlow
         nodes={nodes}
         edges={edges}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
 import clsx from "clsx";
 import { useExecutionStore } from "../../stores/executionStore";
@@ -13,6 +13,9 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
   const [hovering, setHovering] = useState(false);
   const [hasResult, setHasResult] = useState(false);
   const [resultPreview, setResultPreview] = useState<string>("");
+  const [dimensions, setDimensions] = useState({ width: 300, height: 200 });
+  const [isResizing, setIsResizing] = useState(false);
+  const nodeRef = useRef<HTMLDivElement>(null);
   const getNodeResult = useExecutionStore((state) => state.getNodeResult);
   const runId = useExecutionStore((state) => state.runId);
   const executionResults = useExecutionStore((state) => state.executionResults);
@@ -32,8 +35,8 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
         preview = String(displayValue);
       }
       // Limit preview length
-      if (preview.length > 100) {
-        preview = preview.substring(0, 100) + "...";
+      if (preview.length > 500) {
+        preview = preview.substring(0, 500) + "...";
       }
       setResultPreview(preview);
       setHasResult(true);
@@ -90,13 +93,49 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
     setHasResult(true);
   };
 
+  const handleResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startWidth = dimensions.width;
+    const startHeight = dimensions.height;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = Math.min(600, Math.max(200, startWidth + e.clientX - startX));
+      const newHeight = Math.min(400, Math.max(150, startHeight + e.clientY - startY));
+      
+      setDimensions({ width: newWidth, height: newHeight });
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'nwse-resize';
+  };
+
   return (
     <>
       <div
+        ref={nodeRef}
         className={clsx(
-          "bg-black rounded-lg border-2 border-neutral-500 p-4 min-w-[200px] relative flex flex-col items-center justify-center",
-          hovering && "border-red-400 shadow-lg"
+          "bg-neutral-900 rounded-lg border border-neutral-600 relative flex flex-col",
+          "overflow-hidden select-none",
+          hovering && !isResizing && "border-neutral-400",
+          isResizing && "shadow-xl border-blue-500"
         )}
+        style={{
+          width: `${dimensions.width}px`,
+          height: `${dimensions.height}px`,
+        }}
         onMouseEnter={() => setHovering(true)}
         onMouseLeave={() => setHovering(false)}
       >
@@ -104,40 +143,78 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
         {hovering && (
           <button
             onClick={handleDelete}
-            className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors z-10"
+            className="absolute top-2 right-2 w-5 h-5 bg-red-500/80 text-white rounded flex items-center justify-center text-xs hover:bg-red-600 transition-colors z-10"
           >
             ✕
           </button>
         )}
 
-        <div className="w-full flex flex-col items-center justify-center">
-          <h3 className="text-white font-semibold text-sm mb-2">Result</h3>
-
-          {/* Result preview */}
-          {hasResult && (
-            <div className="mb-2">
-              <div className="text-xs text-neutral-400 mb-1">Output:</div>
-              <div className="bg-neutral-900 rounded p-2 max-w-[250px] max-h-[100px] overflow-auto">
-                <pre className="text-xs text-green-400 whitespace-pre-wrap break-all">
-                  {resultPreview}
-                </pre>
-              </div>
+        {/* Output display area - takes most of the space */}
+        <div 
+          className="flex-1 p-3 overflow-auto nowheel"
+          tabIndex={0}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            e.currentTarget.focus();
+          }}
+          onWheel={(e) => {
+            e.stopPropagation();
+          }}
+        >
+          {hasResult ? (
+            <pre className="text-sm text-green-400 font-mono whitespace-pre-wrap break-all">
+              {resultPreview}
+            </pre>
+          ) : (
+            <div className="text-neutral-500 text-sm">
+              No output yet. Run the flow to see results.
             </div>
           )}
+        </div>
 
-          {/* Get Result button */}
-          <button
-            className={clsx(
-              "text-xs px-2 py-1 rounded transition-colors w-full",
-              hasResult
-                ? "bg-green-800 text-white hover:bg-green-700"
-                : "bg-neutral-600 text-neutral-400 cursor-not-allowed"
-            )}
-            onClick={handleGetResult}
-            disabled={!hasResult}
-          >
-            {hasResult ? "Download Result" : "No Result Yet"}
-          </button>
+        {/* Download button - small and at the bottom */}
+        {hasResult && (
+          <div className="border-t border-neutral-700 p-2">
+            <button
+              className="text-xs px-2 py-1 bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white rounded transition-colors w-full"
+              onClick={handleGetResult}
+            >
+              Download
+            </button>
+          </div>
+        )}
+
+        {/* Resize handle */}
+        <div
+          onMouseDown={handleResize}
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseEnter={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'nwse-resize';
+          }}
+          onMouseLeave={(e) => {
+            e.stopPropagation();
+            if (!isResizing) {
+              document.body.style.cursor = '';
+            }
+          }}
+          className="nodrag absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize group z-20"
+          style={{ pointerEvents: 'auto' }}
+        >
+          <div className="absolute bottom-0 right-0 w-full h-full pointer-events-none">
+            {/* Three dots pattern for better visibility */}
+            <svg 
+              className="w-full h-full" 
+              viewBox="0 0 16 16"
+              style={{ opacity: hovering || isResizing ? 1 : 0.5 }}
+            >
+              <circle cx="12" cy="12" r="1" fill="#737373"/>
+              <circle cx="8" cy="12" r="1" fill="#737373"/>
+              <circle cx="12" cy="8" r="1" fill="#737373"/>
+            </svg>
+          </div>
+          {/* Invisible larger hit area */}
+          <div className="absolute -top-1 -left-1 w-6 h-6 bg-transparent pointer-events-none" />
         </div>
 
         <Handle
@@ -146,7 +223,8 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
           className="w-3 h-3"
           style={{
             left: -6,
-            top: `${30}px`,
+            top: '50%',
+            transform: 'translateY(-50%)',
           }}
         />
       </div>
