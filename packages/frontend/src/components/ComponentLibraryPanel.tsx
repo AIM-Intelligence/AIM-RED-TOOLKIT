@@ -1,22 +1,18 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { componentLibrary, type ComponentTemplate } from "../../../config/componentLibrary";
+import { Panel } from "@xyflow/react";
+import { componentLibrary, type ComponentTemplate } from "../config/componentLibrary";
 
-interface ProjectPanelProps {
-  projectTitle: string;
-  nodeCount: number;
-  edgeCount: number;
+interface ComponentLibraryPanelProps {
   onComponentSelect: (component: ComponentTemplate) => void;
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
-export default function ProjectPanel({
-  projectTitle,
-  nodeCount,
-  edgeCount,
+export default function ComponentLibraryPanel({
   onComponentSelect,
-}: ProjectPanelProps) {
-  const navigate = useNavigate();
-  const [isExpanded, setIsExpanded] = useState(false);
+  isOpen,
+  onToggle,
+}: ComponentLibraryPanelProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
     new Set(componentLibrary.map(cat => cat.id))
   );
@@ -44,44 +40,41 @@ export default function ProjectPanel({
   })).filter(category => category.components.length > 0);
 
   return (
-    <div className="flex flex-col gap-3 items-center">
-      {/* Header Section */}
-      <button
-        className="flex flex-row items-center w-full justify-start hover:cursor-pointer"
-        onClick={() => navigate("/")}
-      >
-        <img
-          src="/arrow-back.svg"
-          alt="back"
-          className="flex items-center justify-center w-5 h-5"
-        />
-        <h2 className="text-white text-lg text-center mb-0.5">Home</h2>
-      </button>
-      <h1 className="text-white text-2xl font-semibold mt-4 mb-2">
-        {projectTitle}
-      </h1>
-      <div className="text-neutral-400 text-sm mb-2">
-        Nodes: {nodeCount} | Edges: {edgeCount}
-      </div>
+    <>
+      {/* Toggle Button */}
+      <Panel position="top-left" style={{ top: "200px" }}>
+        <button
+          onClick={onToggle}
+          className="px-4 py-2 bg-neutral-800 text-white rounded-lg hover:bg-neutral-700 transition-colors flex items-center gap-2 border border-neutral-600"
+        >
+          <span className="text-lg">{isOpen ? "📚" : "📖"}</span>
+          <span className="font-medium">Components</span>
+        </button>
+      </Panel>
 
-      {/* Component Library Toggle Button */}
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full px-3 py-2 bg-neutral-800 text-white rounded-lg hover:bg-neutral-700 transition-colors flex items-center justify-center gap-2 border border-neutral-600"
-      >
-        <span className="text-lg">{isExpanded ? "📚" : "📖"}</span>
-        <span className="font-medium">Components</span>
-        <span className="text-xs">({isExpanded ? "−" : "+"})</span>
-      </button>
-
-      {/* Component Library Section */}
-      {isExpanded && (
-        <div className="w-full bg-neutral-900 border border-neutral-700 rounded-lg shadow-lg overflow-hidden">
-          {/* Search */}
+      {/* Library Panel */}
+      {isOpen && (
+        <Panel
+          position="top-left" 
+          className="bg-neutral-900 border border-neutral-700 rounded-lg shadow-2xl max-h-[60vh] overflow-hidden flex flex-col"
+          style={{ width: "280px", top: "250px" }}
+        >
+          {/* Header */}
           <div className="p-3 border-b border-neutral-700">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-white font-semibold">Components</h3>
+              <button
+                onClick={onToggle}
+                className="text-neutral-400 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            {/* Search */}
             <input
               type="text"
-              placeholder="Search..."
+              placeholder="Search components..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full px-3 py-1.5 bg-neutral-800 text-white rounded border border-neutral-600 focus:border-red-500 focus:outline-none text-sm"
@@ -89,7 +82,7 @@ export default function ProjectPanel({
           </div>
 
           {/* Categories */}
-          <div className="max-h-[50vh] overflow-y-auto p-2">
+          <div className="flex-1 overflow-y-auto p-2">
             {filteredLibrary.length === 0 ? (
               <div className="text-neutral-500 text-center py-4 text-sm">
                 No components found
@@ -106,8 +99,8 @@ export default function ProjectPanel({
                       <span className="text-neutral-400 text-xs">
                         {expandedCategories.has(category.id) ? "▼" : "▶"}
                       </span>
-                      <span className="text-base">{category.icon}</span>
-                      <span className="text-white text-xs font-medium">
+                      <span className="text-lg">{category.icon}</span>
+                      <span className="text-white text-sm font-medium">
                         {category.name}
                       </span>
                     </div>
@@ -123,14 +116,14 @@ export default function ProjectPanel({
                         <button
                           key={component.id}
                           onClick={() => onComponentSelect(component)}
-                          className="w-full flex items-start gap-2 px-2 py-1.5 hover:bg-neutral-800 rounded transition-colors group"
+                          className="w-full flex items-start gap-2 px-2 py-2 hover:bg-neutral-800 rounded transition-colors group"
                         >
-                          <span className="text-base mt-0.5">{component.icon}</span>
+                          <span className="text-lg mt-0.5">{component.icon}</span>
                           <div className="flex-1 text-left">
-                            <div className="text-white text-xs group-hover:text-red-400 transition-colors">
+                            <div className="text-white text-sm group-hover:text-red-400 transition-colors">
                               {component.name}
                             </div>
-                            <div className="text-neutral-500 text-xs">
+                            <div className="text-neutral-500 text-xs mt-0.5">
                               {component.description}
                             </div>
                           </div>
@@ -142,8 +135,15 @@ export default function ProjectPanel({
               ))
             )}
           </div>
-        </div>
+
+          {/* Footer */}
+          <div className="p-2 border-t border-neutral-700">
+            <div className="text-neutral-500 text-xs text-center">
+              Click component to add to canvas
+            </div>
+          </div>
+        </Panel>
       )}
-    </div>
+    </>
   );
 }

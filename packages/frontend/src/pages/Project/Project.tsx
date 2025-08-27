@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import IdeModal from "../../components/modal/Ide";
-import SetupModal from "../../components/modal/SetupModal";
 import Loading from "../../components/loading/Loading";
 import WrongPath from "../WrongPath/WrongPath";
 import ProjectPanel from "./layouts/ProjectPanel";
@@ -10,13 +9,13 @@ import ProjectFlow from "./flow/ProjectFlow";
 import { useProjectData } from "../../hooks/useProjectData";
 import { useNodeOperations } from "../../hooks/useNodeOperations";
 import { useEdgeOperations } from "../../hooks/useEdgeOperations";
+import { type ComponentTemplate } from "../../config/componentLibrary";
 
 export default function Project() {
   const { projectId } = useParams<{ projectId: string }>();
 
   // UI State
   const [isIdeModalOpen, setIsIdeModalOpen] = useState(false);
-  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
   const [selectedNodeData, setSelectedNodeData] = useState<{
     nodeId: string;
     title: string;
@@ -75,17 +74,51 @@ export default function Project() {
     return nodes.some((node) => node.type === "start");
   }, [nodes]);
 
-  // Handle SetupModal confirm
-  const handleSetupConfirm = useCallback(
-    async (nodeData: {
-      title: string;
-      description: string;
-      nodeType: "custom" | "start" | "result";
-    }) => {
-      await addNewNode(nodeData);
-      setIsSetupModalOpen(false);
+
+  // Handle component library selection
+  const handleComponentSelect = useCallback(
+    async (component: ComponentTemplate) => {
+      if (!projectId) return;
+
+      // Check if trying to add a second start node
+      if (component.nodeType === "start" && hasStartNode) {
+        alert("Only one Start node is allowed per flow");
+        return;
+      }
+
+      // Generate new node ID
+      const newNodeId = String(nodeIdCounter);
+      setNodeIdCounter(prev => prev + 1);
+
+      try {
+        // Create node from template
+        const apiUrl = window.location.hostname === 'localhost' 
+          ? 'http://localhost:8000' 
+          : `http://${window.location.hostname}:8000`;
+        const response = await fetch(`${apiUrl}/api/components/create-from-template`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId,
+            node_id: newNodeId,
+            template_name: component.template,
+            title: component.name,
+            description: component.description,
+          }),
+        });
+
+        if (response.ok) {
+          // Refresh the page to load the new node
+          // This ensures the node is properly loaded with template code
+          window.location.reload();
+        } else {
+          console.error("Failed to create node from template");
+        }
+      } catch (error) {
+        console.error("Error creating node from template:", error);
+      }
     },
-    [addNewNode]
+    [projectId, nodeIdCounter, addNewNode, hasStartNode]
   );
 
   // Handle retry
@@ -118,9 +151,9 @@ export default function Project() {
       >
         <ProjectPanel
           projectTitle={projectTitle}
-          onAddNodeClick={() => setIsSetupModalOpen(true)}
           nodeCount={nodes.length}
           edgeCount={edges.length}
+          onComponentSelect={handleComponentSelect}
         />
       </ProjectFlow>
 
@@ -131,14 +164,6 @@ export default function Project() {
         projectId={projectId}
         nodeId={selectedNodeData.nodeId}
         nodeTitle={selectedNodeData.title}
-      />
-
-      {/* Setup Modal for creating new nodes */}
-      <SetupModal
-        isOpen={isSetupModalOpen}
-        onClose={() => setIsSetupModalOpen(false)}
-        onConfirm={handleSetupConfirm}
-        hasStartNode={hasStartNode}
       />
     </>
   );
