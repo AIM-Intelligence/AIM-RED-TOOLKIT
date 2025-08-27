@@ -10,6 +10,7 @@ import { useProjectData } from "../../hooks/useProjectData";
 import { useNodeOperations } from "../../hooks/useNodeOperations";
 import { useEdgeOperations } from "../../hooks/useEdgeOperations";
 import { type ComponentTemplate } from "../../config/componentLibrary";
+import { codeApi } from "../../utils/api";
 
 export default function Project() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -51,7 +52,7 @@ export default function Project() {
   }
 
   // Node operations
-  const { nodes, edges, setEdges, onNodesChange, onEdgesChange, addNewNode } =
+  const { nodes, setNodes, edges, setEdges, onNodesChange, onEdgesChange, addNewNode } =
     useNodeOperations({
       projectId,
       initialNodes: transformedNodes,
@@ -108,9 +109,71 @@ export default function Project() {
         });
 
         if (response.ok) {
-          // Refresh the page to load the new node
-          // This ensures the node is properly loaded with template code
-          window.location.reload();
+          const result = await response.json();
+          
+          // Get metadata for the new node to extract inputs/outputs
+          let inputs = undefined;
+          let outputs = undefined;
+          
+          try {
+            const metadataResult = await codeApi.getNodeMetadata({
+              project_id: projectId,
+              node_id: newNodeId,
+              node_data: { 
+                data: { 
+                  file: result.file_name || `${newNodeId}_${component.name.replace(/\s+/g, '_')}.py` 
+                } 
+              }
+            });
+            
+            if (metadataResult.success && metadataResult.metadata) {
+              const metadata = metadataResult.metadata;
+              
+              // Convert metadata to port format
+              if (metadata.inputs?.length > 0) {
+                inputs = metadata.inputs.map((input: any) => ({
+                  id: input.name,
+                  label: input.name,
+                  type: input.type,
+                  required: input.required !== false,
+                  default: input.default,
+                }));
+              }
+              
+              if (metadata.outputs?.length > 0) {
+                outputs = metadata.outputs.map((output: any) => ({
+                  id: output.name,
+                  label: output.name,
+                  type: output.type,
+                  required: false,
+                  default: undefined,
+                }));
+              }
+            }
+          } catch (error) {
+            console.error(`Failed to fetch metadata for new node:`, error);
+          }
+          
+          // Create new node without page refresh
+          const newNode = {
+            id: newNodeId,
+            type: component.nodeType || "custom",
+            position: { 
+              x: 250 + Math.random() * 100, // Random offset to prevent overlap
+              y: 100 + Math.random() * 100 
+            },
+            data: {
+              title: component.name,
+              description: component.description,
+              file: result.file_name || `${newNodeId}_${component.name.replace(/\s+/g, '_')}.py`,
+              viewCode: () => handleNodeClick(newNodeId, component.name),
+              inputs: inputs,
+              outputs: outputs,
+            }
+          };
+          
+          // Add node to React Flow
+          setNodes(currentNodes => [...currentNodes, newNode]);
         } else {
           console.error("Failed to create node from template");
         }
