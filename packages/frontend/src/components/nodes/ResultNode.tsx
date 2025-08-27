@@ -35,8 +35,8 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
         preview = String(displayValue);
       }
       // Limit preview length
-      if (preview.length > 500) {
-        preview = preview.substring(0, 500) + "...";
+      if (preview.length > 1500) {
+        preview = preview.substring(0, 1500) + "...";
       }
       setResultPreview(preview);
       setHasResult(true);
@@ -104,8 +104,8 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
     const startHeight = dimensions.height;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = Math.min(600, Math.max(200, startWidth + e.clientX - startX));
-      const newHeight = Math.min(400, Math.max(150, startHeight + e.clientY - startY));
+      const newWidth = Math.min(900, Math.max(200, startWidth + e.clientX - startX));
+      const newHeight = Math.min(600, Math.max(150, startHeight + e.clientY - startY));
       
       setDimensions({ width: newWidth, height: newHeight });
     };
@@ -223,13 +223,11 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
         <Handle
           type="target"
           position={Position.Left}
-          className="w-3 h-3 bg-gray-500 border-2 border-gray-400"
+          className="w-3 h-3"
           style={{
-            left: -6,
+            left: -8,
             top: '50%',
             transform: 'translateY(-50%)',
-            background: '#6b7280',
-            border: '2px solid #9ca3af',
           }}
         />
       </div>

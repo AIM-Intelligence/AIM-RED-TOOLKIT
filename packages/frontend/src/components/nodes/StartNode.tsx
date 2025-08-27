@@ -202,8 +202,9 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
           position={Position.Right}
           className="w-3 h-3"
           style={{
-            right: -6,
-            top: `${30}px`,
+            right: -11.5,
+            top: '50%',
+            transform: 'translateY(-50%)',
           }}
         />
       </div>
