@@ -11,9 +11,12 @@ services:
       - ./packages/backend/app:/app/app
       # Mount projects directory for persistent storage
       - ./packages/backend/projects:/app/projects
+      # Mount AIM-RedLab for imports
+      - ../AIM-RedLab:/aim-redlab:ro
     environment:
       - PYTHONUNBUFFERED=1
       - DEVELOPMENT=true
+      - AIM_REDLAB_PATH=/aim-redlab
     networks:
       - aim-red-network-dev
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

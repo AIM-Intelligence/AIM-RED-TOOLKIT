@@ -119,6 +119,13 @@ class EnhancedFlowExecutor(FlowExecutor):
     ) -> Any:
         """Execute node code in the same process with a safe namespace"""
         
+        # Add AIM-RedLab to Python path for imports
+        import sys
+        import os
+        aim_redlab_path = os.environ.get('AIM_REDLAB_PATH', '/Users/kwontaeyoun/Desktop/AIM/AIM-RedLab')
+        if os.path.exists(aim_redlab_path) and aim_redlab_path not in sys.path:
+            sys.path.insert(0, aim_redlab_path)
+        
         # Get node file path
         file_name = node_data.get("data", {}).get("file")
         if not file_name:
@@ -204,6 +211,12 @@ class EnhancedFlowExecutor(FlowExecutor):
             're': __import__('re'),
             'collections': __import__('collections'),
             'itertools': __import__('itertools'),
+            'Path': __import__('pathlib').Path,  # Add Path for file operations
+            'pathlib': __import__('pathlib'),
+            'os': __import__('os'),
+            'sys': __import__('sys'),
+            'asyncio': __import__('asyncio'),
+            'tempfile': __import__('tempfile'),
         }
         
         # Don't import pandas/numpy here - let nodes import them if needed
