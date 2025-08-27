@@ -24,7 +24,7 @@ const IdeModal: React.FC<IdeModalProps> = ({
   projectId,
   nodeId,
   nodeTitle,
-  initialCode = "# Write your Python function here\ndef foo():\n  return 'Hello, World!'",
+  initialCode = "",
 }) => {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [saveModalOpen, setSaveModalOpen] = useState(false);
@@ -32,7 +32,7 @@ const IdeModal: React.FC<IdeModalProps> = ({
     "loading"
   );
   const [code, setCode] = useState(initialCode);
-  const [isLoadingCode, setIsLoadingCode] = useState(false);
+  const [isLoadingCode, setIsLoadingCode] = useState(true);
   const [runModalOpen, setRunModalOpen] = useState(false);
   const [runStatus, setRunStatus] = useState<"loading" | "success" | "error">(
     "loading"
@@ -302,8 +302,10 @@ def main(input_data=None):
     (editor: editor.IStandaloneCodeEditor, monaco: typeof Monaco) => {
       editorRef.current = editor;
 
-      // Set the code directly
-      editor.setValue(code);
+      // Only set the code if we have it loaded (not loading)
+      if (!isLoadingCode && code) {
+        editor.setValue(code);
+      }
 
       // Configure editor options
       editor.updateOptions({
@@ -357,7 +359,7 @@ def main(input_data=None):
         },
       });
     },
-    [code, projectId, nodeId, nodeTitle, handleRunCode]
+    [code, isLoadingCode, projectId, nodeId, nodeTitle, handleRunCode]
   );
 
   if (!isOpen) return null;
@@ -421,18 +423,25 @@ def main(input_data=None):
         </div>
 
         <div className="flex-1 p-4 bg-neutral-900">
-          <Editor
-            height="100%"
-            defaultLanguage="python"
-            defaultValue={code}
-            theme="vs-dark"
-            onMount={handleEditorDidMount}
-            options={{
-              automaticLayout: true,
-              minimap: { enabled: true },
-              fontSize: 14,
-            }}
-          />
+          {isLoadingCode ? (
+            <div className="flex items-center justify-center h-full">
+              <span className="text-neutral-400">Loading code...</span>
+            </div>
+          ) : (
+            <Editor
+              height="100%"
+              defaultLanguage="python"
+              defaultValue={code}
+              theme="vs-dark"
+              onMount={handleEditorDidMount}
+              options={{
+                automaticLayout: true,
+                minimap: { enabled: true },
+                fontSize: 14,
+                readOnly: false,
+              }}
+            />
+          )}
         </div>
 
         <div className="p-4 border-t border-neutral-700 flex justify-between">
