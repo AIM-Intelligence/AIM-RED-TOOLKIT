@@ -230,6 +230,18 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
             transform: 'translateY(-50%)',
           }}
         />
+        
+        {/* Output handle for passing data to next component */}
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="w-3 h-3"
+          style={{
+            right: -8,
+            top: '50%',
+            transform: 'translateY(-50%)',
+          }}
+        />
       </div>
     </>
   );
