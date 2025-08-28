@@ -28,6 +28,7 @@ interface ExecutionState {
   }) => void;
   clearResults: () => void;
   getNodeResult: (nodeId: string) => unknown;
+  setNodeResult: (nodeId: string, value: unknown) => void;
   setToastMessage: (message: string | null) => void;
 }
 
@@ -77,6 +78,13 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     }
     return null;
   },
+
+  setNodeResult: (nodeId, value) => set((state) => ({
+    resultNodes: {
+      ...state.resultNodes,
+      [nodeId]: value,
+    },
+  })),
 
   setToastMessage: (message) => set({ toastMessage: message }),
 }));

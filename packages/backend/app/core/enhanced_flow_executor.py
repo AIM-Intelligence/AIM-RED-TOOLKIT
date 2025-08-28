@@ -33,7 +33,8 @@ class EnhancedFlowExecutor(FlowExecutor):
         node_data: Dict,
         input_data: Any,
         timeout: int = 30,
-        target_handles: Optional[Dict[str, str]] = None  # Map of source_id -> target_handle
+        target_handles: Optional[Dict[str, str]] = None,  # Map of source_id -> target_handle
+        result_node_values: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Execute node in the same process to enable object passing"""
         
@@ -50,14 +51,26 @@ class EnhancedFlowExecutor(FlowExecutor):
         
         # Handle result nodes
         if node_type == "result":
-            # Unwrap input if it's a reference
-            actual_input = self._unwrap_input(project_id, input_data)
-            return {
-                "status": "success",
-                "output": actual_input,  # Pass through the actual value
-                "execution_time_ms": 0,
-                "logs": "Result node - displaying input data",
-            }
+            # Check if this Result node has a stored value (user typed text)
+            stored_value = result_node_values.get(node_id) if result_node_values else None
+            
+            if stored_value is not None and stored_value != "":
+                # Use the stored value as output
+                return {
+                    "status": "success",
+                    "output": stored_value,
+                    "execution_time_ms": 0,
+                    "logs": "Result node - using stored text value",
+                }
+            else:
+                # No stored value, pass through input
+                actual_input = self._unwrap_input(project_id, input_data)
+                return {
+                    "status": "success",
+                    "output": actual_input,  # Pass through the actual value
+                    "execution_time_ms": 0,
+                    "logs": "Result node - displaying input data",
+                }
         
         # Handle custom nodes with in-process execution
         try:
@@ -487,6 +500,7 @@ class EnhancedFlowExecutor(FlowExecutor):
         project_id: str,
         start_node_id: Optional[str] = None,
         params: Optional[Dict[str, Any]] = None,
+        result_node_values: Optional[Dict[str, Any]] = None,
         max_workers: int = 4,
         timeout_sec: int = 30,
         halt_on_error: bool = True,
@@ -619,6 +633,7 @@ class EnhancedFlowExecutor(FlowExecutor):
                     input_data,
                     timeout_sec,
                     target_handles if target_handles else None,
+                    result_node_values,
                 )
                 
                 execution_results[node_id] = result

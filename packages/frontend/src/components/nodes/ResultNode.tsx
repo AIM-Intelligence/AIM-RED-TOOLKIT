@@ -11,23 +11,23 @@ export type ResultNodeType = Node<{
 
 export default function ResultNode(props: NodeProps<ResultNodeType>) {
   const [hovering, setHovering] = useState(false);
-  const [hasResult, setHasResult] = useState(false);
-  const [resultPreview, setResultPreview] = useState<string>("");
   const [dimensions, setDimensions] = useState({ width: 300, height: 200 });
   const [isResizing, setIsResizing] = useState(false);
+  const [userText, setUserText] = useState<string>("");
   const nodeRef = useRef<HTMLDivElement>(null);
   const getNodeResult = useExecutionStore((state) => state.getNodeResult);
+  const setNodeResult = useExecutionStore((state) => state.setNodeResult);
   const runId = useExecutionStore((state) => state.runId);
   const executionResults = useExecutionStore((state) => state.executionResults);
 
-  // Update result preview when execution results change
+  // Update text when execution results change
   useEffect(() => {
     const result = getNodeResult(props.id);
     if (result !== null && result !== undefined) {
       // The result is now the actual value directly from the previous node
       const displayValue = result;
 
-      // Format result for preview
+      // Format result for display
       let preview = "";
       if (typeof displayValue === "object" && displayValue !== null) {
         preview = JSON.stringify(displayValue, null, 2);
@@ -38,13 +38,17 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
       if (preview.length > 1500) {
         preview = preview.substring(0, 1500) + "...";
       }
-      setResultPreview(preview);
-      setHasResult(true);
-    } else {
-      setResultPreview("");
-      setHasResult(false);
+      setUserText(preview);
     }
   }, [executionResults, props.id, getNodeResult]);
+
+  // Handle text change
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newText = e.target.value;
+    setUserText(newText);
+    // Store the text as the node's result so it can be passed to next nodes
+    setNodeResult(props.id, newText);
+  };
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -59,11 +63,11 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
   const handleGetResult = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    // Get the result for this node
-    const result = getNodeResult(props.id);
+    // Use current text (either from user input or execution)
+    const currentValue = userText || "";
 
-    if (result === null || result === undefined) {
-      alert("No execution result available. Please run the flow first.");
+    if (!currentValue) {
+      alert("No content to download.");
       return;
     }
 
@@ -74,7 +78,7 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
       project_title: props.data.projectTitle,
       run_id: runId,
       timestamp: new Date().toISOString(),
-      result: result, // This is now the actual return value from the previous node
+      result: currentValue,
     };
 
     // Create and download JSON file
@@ -89,8 +93,6 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-
-    setHasResult(true);
   };
 
   const handleResize = (e: React.MouseEvent) => {
@@ -104,8 +106,8 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
     const startHeight = dimensions.height;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const newWidth = Math.min(900, Math.max(200, startWidth + e.clientX - startX));
-      const newHeight = Math.min(600, Math.max(150, startHeight + e.clientY - startY));
+      const newWidth = Math.min(900, Math.max(50, startWidth + e.clientX - startX));
+      const newHeight = Math.min(600, Math.max(50, startHeight + e.clientY - startY));
       
       setDimensions({ width: newWidth, height: newHeight });
     };
@@ -151,31 +153,22 @@ export default function ResultNode(props: NodeProps<ResultNodeType>) {
             </button>
           )}
 
-          {/* Output display area - takes most of the space */}
-          <div 
-            className="flex-1 p-3 overflow-auto nowheel"
-          tabIndex={0}
-          onMouseDown={(e) => {
-            e.stopPropagation();
-            e.currentTarget.focus();
-          }}
-          onWheel={(e) => {
-            e.stopPropagation();
-          }}
-        >
-          {hasResult ? (
-            <pre className="text-sm text-green-400 font-mono whitespace-pre-wrap break-all">
-              {resultPreview}
-            </pre>
-          ) : (
-            <div className="text-neutral-500 text-sm">
-              No output yet. Run the flow to see results.
-            </div>
-          )}
-        </div>
+          {/* Editable text area - takes most of the space */}
+          <textarea
+            className="flex-1 p-3 bg-transparent text-sm text-green-400 font-mono resize-none outline-none nowheel"
+            value={userText}
+            onChange={handleTextChange}
+            placeholder="Type here or run the flow to see results..."
+            onMouseDown={(e) => {
+              e.stopPropagation();
+            }}
+            onWheel={(e) => {
+              e.stopPropagation();
+            }}
+          />
 
           {/* Download button - small and at the bottom */}
-          {hasResult && (
+          {userText && (
             <div className="border-t border-neutral-700 p-2">
               <button
                 className="text-xs px-2 py-1 bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white rounded transition-colors w-full"

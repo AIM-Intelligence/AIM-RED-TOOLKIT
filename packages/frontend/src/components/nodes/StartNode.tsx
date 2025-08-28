@@ -33,6 +33,7 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
     (state) => state.setExecutionResults
   );
   const setToastMessage = useExecutionStore((state) => state.setToastMessage);
+  const resultNodes = useExecutionStore((state) => state.resultNodes);
 
   const handleRunFlow = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -62,6 +63,7 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
         project_id: projectId,
         start_node_id: props.id,
         params: {},
+        result_node_values: resultNodes,
         max_workers: 4,
         timeout_sec: 30,
         halt_on_error: true,

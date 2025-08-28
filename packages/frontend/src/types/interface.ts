@@ -224,6 +224,7 @@ export interface ExecuteFlowRequest {
   project_id: string;
   start_node_id?: string;
   params?: Record<string, unknown>;
+  result_node_values?: Record<string, unknown>;
   max_workers?: number;
   timeout_sec?: number;
   halt_on_error?: boolean;

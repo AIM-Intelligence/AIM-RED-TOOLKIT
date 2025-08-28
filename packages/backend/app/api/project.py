@@ -72,6 +72,7 @@ class ExecuteFlowRequest(BaseModel):
     project_id: str
     start_node_id: Optional[str] = None
     params: Dict[str, Any] = Field(default_factory=dict)
+    result_node_values: Dict[str, Any] = Field(default_factory=dict)
     max_workers: int = Field(default=4, ge=1, le=10)
     timeout_sec: int = Field(default=30, ge=1, le=300)
     halt_on_error: bool = True
@@ -279,6 +280,7 @@ async def execute_flow(request: ExecuteFlowRequest):
             project_id=request.project_id,
             start_node_id=request.start_node_id,
             params=request.params,
+            result_node_values=request.result_node_values,
             max_workers=request.max_workers,
             timeout_sec=request.timeout_sec,
             halt_on_error=request.halt_on_error
