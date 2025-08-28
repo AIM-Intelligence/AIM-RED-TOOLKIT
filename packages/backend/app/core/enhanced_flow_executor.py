@@ -54,7 +54,8 @@ class EnhancedFlowExecutor(FlowExecutor):
             # Check if this Result node has a stored value (user typed text)
             stored_value = result_node_values.get(node_id) if result_node_values else None
             
-            if stored_value is not None and stored_value != "":
+            # Only use stored value if it's not None, not empty string, not empty list, and not 0
+            if stored_value is not None and stored_value != "" and stored_value != [] and stored_value != 0:
                 # Use the stored value as output
                 return {
                     "status": "success",
@@ -80,18 +81,28 @@ class EnhancedFlowExecutor(FlowExecutor):
             actual_input = self._unwrap_input(project_id, input_data)
             
             # 2. If we have target handle information, restructure input for RunScript
+            # Check if input_data already has handle names as keys (from multi-input scenario)
+            # In that case, it's already properly structured and we don't need to restructure
             if target_handles and isinstance(actual_input, dict):
-                # Check if this is a multi-input scenario
-                restructured_input = {}
-                for source_id, value in actual_input.items():
-                    if source_id in target_handles:
-                        # Use the target handle as the parameter name
-                        handle_name = target_handles[source_id]
-                        restructured_input[handle_name] = value
-                    else:
-                        # Keep original key if no handle mapping
-                        restructured_input[source_id] = value
-                actual_input = restructured_input
+                # Check if the keys are already handle names (not source IDs)
+                handle_values = set(target_handles.values())
+                input_keys = set(actual_input.keys())
+                
+                if input_keys == handle_values or input_keys.issubset(handle_values):
+                    # Input is already structured with handle names, don't restructure
+                    pass
+                else:
+                    # Input has source IDs as keys, need to restructure
+                    restructured_input = {}
+                    for source_id, value in actual_input.items():
+                        if source_id in target_handles:
+                            # Use the target handle as the parameter name
+                            handle_name = target_handles[source_id]
+                            restructured_input[handle_name] = value
+                        else:
+                            # Keep original key if no handle mapping
+                            restructured_input[source_id] = value
+                    actual_input = restructured_input
             elif target_handles and len(target_handles) == 1:
                 # Single input with target handle - wrap in dict with handle name
                 handle_name = list(target_handles.values())[0]
@@ -601,7 +612,14 @@ class EnhancedFlowExecutor(FlowExecutor):
                         input_data = {}
                         for edge_info in incoming_edges:
                             source = edge_info["source"]
-                            source_output = node_outputs[source]
+                            source_output = node_outputs.get(source)
+                            
+                            # Skip if source hasn't been executed yet
+                            if source not in node_outputs:
+                                continue
+                            
+                            # Get the actual value to use
+                            value = source_output
                             
                             # Extract specific output if sourceHandle is specified
                             if isinstance(source_output, dict) and edge_info["sourceHandle"]:

@@ -157,6 +157,7 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
       <LoadingModal
         isOpen={modalState.isOpen}
         status={modalState.status}
+        position="top" // 상단 중앙에 표시
         onClose={() => setModalState({ ...modalState, isOpen: false })}
         notice={{
           loading: modalState.message,

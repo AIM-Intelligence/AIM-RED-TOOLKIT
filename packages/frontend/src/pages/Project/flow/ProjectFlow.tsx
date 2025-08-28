@@ -141,7 +141,7 @@ function ProjectFlowInner({
         {children && (
           <Panel
             position="top-left"
-            className="bg-neutral-800 p-4 rounded-lg border border-neutral-700"
+            className="bg-neutral-800 p-3.5 rounded-lg border border-neutral-700"
           >
             {children}
           </Panel>

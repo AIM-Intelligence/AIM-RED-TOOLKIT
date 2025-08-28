@@ -44,7 +44,7 @@ export default function ProjectPanel({
   })).filter(category => category.components.length > 0);
 
   return (
-    <div className="flex flex-col gap-3 items-center">
+    <div className="flex flex-col gap-1 items-center">
       {/* Header Section */}
       <button
         className="flex flex-row items-center w-full justify-start hover:cursor-pointer"
@@ -57,7 +57,7 @@ export default function ProjectPanel({
         />
         <h2 className="text-white text-lg text-center mb-0.5">Home</h2>
       </button>
-      <h1 className="text-white text-2xl font-semibold mt-4 mb-2">
+      <h1 className="text-white text-2xl font-semibold mb-1">
         {projectTitle}
       </h1>
       <div className="text-neutral-400 text-sm mb-2">
@@ -69,27 +69,29 @@ export default function ProjectPanel({
         onClick={() => setIsExpanded(!isExpanded)}
         className="w-full px-3 py-2 bg-neutral-800 text-white rounded-lg hover:bg-neutral-700 transition-colors flex items-center justify-center gap-2 border border-neutral-600"
       >
-        <span className="text-lg">{isExpanded ? "📚" : "📖"}</span>
         <span className="font-medium">Components</span>
-        <span className="text-xs">({isExpanded ? "−" : "+"})</span>
+        <img 
+          src="/aim-red.png" 
+          alt="AIM RedLab" 
+          className={`w-4 h-4 transition-transform duration-300 ${isExpanded ? 'rotate-180' : 'rotate-0'}`}
+        />
       </button>
 
-      {/* Component Library Section */}
-      {isExpanded && (
-        <div className="w-full bg-neutral-900 border border-neutral-700 rounded-lg shadow-lg overflow-hidden">
-          {/* Search */}
-          <div className="p-3 border-b border-neutral-700">
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-1.5 bg-neutral-800 text-white rounded border border-neutral-600 focus:border-red-500 focus:outline-none text-sm"
-            />
-          </div>
+      {/* Component Library Section - Always rendered but height controlled */}
+      <div className={`w-full bg-neutral-900 border border-neutral-700 rounded-lg shadow-lg overflow-hidden transition-all duration-300 ease-in-out ${!isExpanded ? 'max-h-0 opacity-0 border-transparent' : 'max-h-[60vh] opacity-100'}`}>
+        {/* Search */}
+        <div className="p-3 border-b border-neutral-700">
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-3 py-1.5 bg-neutral-800 text-white rounded border border-neutral-600 focus:border-red-500 focus:outline-none text-sm"
+          />
+        </div>
 
-          {/* Categories */}
-          <div className="max-h-[50vh] overflow-y-auto p-2">
+        {/* Categories */}
+        <div className="max-h-[50vh] overflow-y-auto p-2">
             {filteredLibrary.length === 0 ? (
               <div className="text-neutral-500 text-center py-4 text-sm">
                 No components found
@@ -143,7 +145,6 @@ export default function ProjectPanel({
             )}
           </div>
         </div>
-      )}
     </div>
   );
 }

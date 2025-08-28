@@ -13,6 +13,7 @@ interface LoadingModalProps {
   status: "loading" | "success" | "error";
   onClose: () => void;
   notice: Notice;
+  position?: "center" | "top"; // 위치 옵션 추가
 }
 
 export default function LoadingModal({
@@ -20,6 +21,7 @@ export default function LoadingModal({
   status,
   onClose,
   notice,
+  position = "center", // 기본값은 center
 }: LoadingModalProps) {
   useEffect(() => {
     if (isOpen && status === "success") {
@@ -44,11 +46,15 @@ export default function LoadingModal({
 
   const modalContent = (
     <div
-      className="fixed inset-0 flex items-center justify-center z-[10000] backdrop-blur-sm bg-black/30 animate-fadeIn"
+      className={`fixed z-[10000] animate-fadeIn ${
+        position === "top"
+          ? "top-8 left-1/2 -translate-x-1/2"
+          : "inset-0 flex items-center justify-center backdrop-blur-sm bg-black/30"
+      }`}
       onClick={handleBackgroundClick}
     >
       <div
-        className={`bg-neutral-900 rounded-xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp ${
+        className={`rounded-xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp ${
           status === "error" && notice.errorDetails
             ? "max-w-2xl max-h-[80vh] overflow-auto"
             : ""
@@ -57,12 +63,14 @@ export default function LoadingModal({
       >
         {status === "loading" && (
           <div className="flex flex-col items-center">
-            <img
-              src="/aim-red.png"
-              alt="Loading"
-              className="w-12 h-12 animate-spin-reverse"
-            />
-            <span className="text-white text-lg mt-4 font-semibold">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mb-4">
+              <img
+                src="/aim-red.png"
+                alt="Loading"
+                className="w-8 h-8 animate-spin-reverse"
+              />
+            </div>
+            <span className="text-white text-lg font-semibold">
               {notice.loading}
             </span>
           </div>
