@@ -16,6 +16,11 @@ interface ExecutionState {
   totalExecutionTime: number;
   runId: string | null;
   toastMessage: string | null;
+  currentExecutingNode: string | null;
+  executionProgress: {
+    current: number;
+    total: number;
+  };
   
   // Actions
   setExecuting: (isExecuting: boolean) => void;
@@ -26,6 +31,9 @@ interface ExecutionState {
     total_execution_time_ms: number;
     run_id: string;
   }) => void;
+  updateNodeResult: (nodeId: string, result: ExecutionResult) => void;
+  setExecutionProgress: (current: number, total: number) => void;
+  setCurrentExecutingNode: (nodeId: string | null) => void;
   clearResults: () => void;
   getNodeResult: (nodeId: string) => unknown;
   setNodeResult: (nodeId: string, value: unknown) => void;
@@ -40,6 +48,11 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
   totalExecutionTime: 0,
   runId: null,
   toastMessage: null,
+  currentExecutingNode: null,
+  executionProgress: {
+    current: 0,
+    total: 0,
+  },
 
   setExecuting: (isExecuting) => set({ isExecuting }),
 
@@ -58,12 +71,45 @@ export const useExecutionStore = create<ExecutionState>((set, get) => ({
     isExecuting: false,
   })),
 
+  updateNodeResult: (nodeId, result) => set((state) => {
+    const updatedResults = {
+      ...state.executionResults,
+      [nodeId]: result,
+    };
+    
+    // If it's a result node and has output, update resultNodes
+    let updatedResultNodes = state.resultNodes;
+    if (result.status === 'success' && result.output !== undefined) {
+      // Check if this is actually a result node (we don't have type info here)
+      // so we'll update it if it exists in resultNodes already or if output is present
+      updatedResultNodes = {
+        ...state.resultNodes,
+        [nodeId]: result.output,
+      };
+    }
+    
+    return {
+      executionResults: updatedResults,
+      resultNodes: updatedResultNodes,
+    };
+  }),
+
+  setExecutionProgress: (current, total) => set({
+    executionProgress: { current, total }
+  }),
+
+  setCurrentExecutingNode: (nodeId) => set({
+    currentExecutingNode: nodeId
+  }),
+
   clearResults: () => set({
     executionResults: {},
     resultNodes: {},
     executionOrder: [],
     totalExecutionTime: 0,
     runId: null,
+    currentExecutingNode: null,
+    executionProgress: { current: 0, total: 0 },
   }),
 
   getNodeResult: (nodeId) => {

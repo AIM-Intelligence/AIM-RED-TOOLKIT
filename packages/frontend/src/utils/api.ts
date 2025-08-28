@@ -170,6 +170,88 @@ export const projectApi = {
     });
   },
 
+  // Execute flow with streaming
+  async executeFlowStream(
+    data: ExecuteFlowRequest,
+    onEvent: (event: {
+      type: 'start' | 'node_complete' | 'complete' | 'error';
+      node_id?: string;
+      node_title?: string;
+      node_index?: number;
+      total_nodes?: number;
+      result?: unknown;
+      execution_results?: unknown;
+      result_nodes?: unknown;
+      execution_order?: string[];
+      total_execution_time_ms?: number;
+      error?: string;
+      timestamp?: number;
+    }) => void,
+    onError?: (error: Error) => void
+  ): Promise<void> {
+    const url = `${API_BASE_URL}/project/execute-flow-stream`;
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      if (!reader) {
+        throw new Error('Response body is not readable');
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          break;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        // Keep the last incomplete line in the buffer
+        buffer = lines[lines.length - 1];
+        
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i].trim();
+          
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            try {
+              const event = JSON.parse(data);
+              onEvent(event);
+              
+              // Stop reading if we get a complete or error event
+              if (event.type === 'complete' || event.type === 'error') {
+                reader.cancel();
+                return;
+              }
+            } catch (error) {
+              console.error('Failed to parse SSE event:', error, data);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('SSE streaming error:', error);
+      if (onError) onError(error as Error);
+    }
+  },
+
   // Analyze flow
   async analyzeFlow(data: AnalyzeFlowRequest): Promise<AnalyzeFlowResponse> {
     return apiCall<AnalyzeFlowResponse>("/project/analyze-flow", {

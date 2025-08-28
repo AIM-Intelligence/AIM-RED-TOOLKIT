@@ -5,7 +5,15 @@ import { useExecutionStore } from "../../stores/executionStore";
 import { useParams } from "react-router-dom";
 import { projectApi } from "../../utils/api";
 import LoadingModal from "../modal/LoadingModal";
-import type { ExecuteFlowResponse } from "../../types/interface";
+
+// Define ExecutionResult interface locally
+interface ExecutionResult {
+  status: 'success' | 'error' | 'skipped';
+  output?: unknown;
+  error?: string;
+  execution_time_ms?: number;
+  logs?: string;
+}
 
 export type StartNodeType = Node<{
   title: string;
@@ -54,71 +62,112 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
     setModalState({
       isOpen: true,
       status: "loading",
-      message: "Executing flow...",
+      message: "Starting flow execution...",
       errorDetails: undefined,
     });
 
+    // Clear previous results
+    useExecutionStore.getState().clearResults();
+
     try {
-      const result = await projectApi.executeFlow({
-        project_id: projectId,
-        start_node_id: props.id,
-        params: {},
-        result_node_values: resultNodes,
-        max_workers: 4,
-        timeout_sec: 30,
-        halt_on_error: true,
-      });
-
-      if (result.success) {
-        setExecutionResults({
-          execution_results: result.execution_results || {},
-          result_nodes: result.result_nodes || {},
-          execution_order: result.execution_order || [],
-          total_execution_time_ms: result.total_execution_time_ms || 0,
-          run_id: result.run_id || `run-${Date.now()}`,
-        });
-
-        const nodeCount = result.execution_order?.length || 0;
-        const timeMs = result.total_execution_time_ms || 0;
-
-        // 성공 시 모달 닫고 Toast 표시
-        setModalState({
-          isOpen: false,
-          status: "success",
-          message: "",
-          errorDetails: undefined,
-        });
-        
-        // Toast 메시지 표시
-        setToastMessage(`✅ Flow executed successfully! (${nodeCount} nodes in ${timeMs}ms)`);
-        setTimeout(() => setToastMessage(null), 3000); // 3초 후 자동으로 사라짐
-        
-        console.log(`Flow executed successfully! (${nodeCount} nodes in ${timeMs}ms)`);
-
-        console.log("Flow execution completed:", result);
-      } else {
-        // Collect error details from execution results
-        type ExecutionResult = ExecuteFlowResponse["execution_results"][string];
-        const failedNodes = Object.entries(result.execution_results || {})
-          .filter(
-            ([, res]: [string, ExecutionResult]) => res.status === "error"
-          )
-          .map(([nodeId, res]: [string, ExecutionResult]) => {
-            return `Node ${nodeId}:\n${res.error || "Unknown error"}${
-              res.logs ? "\n\nLogs:\n" + res.logs : ""
-            }`;
-          })
-          .join("\n\n---\n\n");
-
-        setModalState({
-          isOpen: true,
-          status: "error",
-          message: "Flow execution failed",
-          errorDetails: failedNodes || "No error details available",
-        });
-
-        console.error("Flow execution error:", result);
-      }
+      // Use SSE for streaming results
+      await projectApi.executeFlowStream(
+        {
+          project_id: projectId,
+          start_node_id: props.id,
+          params: {},
+          result_node_values: resultNodes,
+          max_workers: 4,
+          timeout_sec: 30,
+          halt_on_error: true,
+        },
+        (event) => {
+          const store = useExecutionStore.getState();
+          
+          switch (event.type) {
+            case 'start':
+              store.setExecutionProgress(0, event.total_nodes || 0);
+              store.setExecutionResults({
+                execution_results: {},
+                result_nodes: {},
+                execution_order: event.execution_order || [],
+                total_execution_time_ms: 0,
+                run_id: `run-${Date.now()}`,
+              });
+              setModalState({
+                isOpen: true,
+                status: "loading",
+                message: `Executing ${event.total_nodes} nodes...`,
+                errorDetails: undefined,
+              });
+              break;
+              
+            case 'node_complete':
+              if (event.node_id && event.result) {
+                store.updateNodeResult(event.node_id, event.result as ExecutionResult);
+                store.setExecutionProgress(event.node_index || 0, event.total_nodes || 0);
+                
+                setModalState({
+                  isOpen: true,
+                  status: "loading",
+                  message: `Running flow... (${event.node_index}/${event.total_nodes}) ${event.node_title || ''}`,
+                  errorDetails: undefined,
+                });
+              }
+              break;
+              
+            case 'complete':
+              if (event.execution_results && event.result_nodes) {
+                store.setExecutionResults({
+                  execution_results: event.execution_results as Record<string, ExecutionResult>,
+                  result_nodes: event.result_nodes as Record<string, unknown>,
+                  execution_order: event.execution_order || [],
+                  total_execution_time_ms: event.total_execution_time_ms || 0,
+                  run_id: `run-${Date.now()}`,
+                });
+              }
+              
+              const nodeCount = event.execution_order?.length || 0;
+              const timeMs = event.total_execution_time_ms || 0;
+              
+              setModalState({
+                isOpen: false,
+                status: "success",
+                message: "",
+                errorDetails: undefined,
+              });
+              
+              setToastMessage(`✅ Flow executed successfully! (${nodeCount} nodes in ${timeMs}ms)`);
+              setTimeout(() => setToastMessage(null), 3000);
+              
+              setIsRunning(false);
+              setExecuting(false);
+              break;
+              
+            case 'error':
+              setModalState({
+                isOpen: true,
+                status: "error",
+                message: "Flow execution failed",
+                errorDetails: event.error || "Unknown error",
+              });
+              setIsRunning(false);
+              setExecuting(false);
+              break;
+          }
+        },
+        (error) => {
+          console.error('SSE error:', error);
+          setModalState({
+            isOpen: true,
+            status: "error",
+            message: "Flow execution failed",
+            errorDetails: error.message,
+          });
+          setIsRunning(false);
+          setExecuting(false);
+        }
+      );
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
@@ -134,7 +183,6 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
       });
 
       console.error("Flow execution error:", error);
-    } finally {
       setIsRunning(false);
       setExecuting(false);
     }

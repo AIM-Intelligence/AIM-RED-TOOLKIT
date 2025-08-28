@@ -701,6 +701,172 @@ class EnhancedFlowExecutor(FlowExecutor):
             ),
         }
     
+    async def execute_flow_streaming(
+        self,
+        project_id: str,
+        start_node_id: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
+        result_node_values: Optional[Dict[str, Any]] = None,
+        max_workers: int = 4,
+        timeout_sec: int = 30,
+        halt_on_error: bool = True,
+    ):
+        """Execute flow with streaming results - yields results as nodes complete"""
+        
+        # Load project structure
+        nodes, edges = self._load_structure(project_id)
+        
+        # Find start node
+        if not start_node_id:
+            start_node_id = self._find_start_node(nodes)
+            if not start_node_id:
+                raise ValueError("No start node found in project")
+        
+        # Get reachable nodes and adjacency
+        reachable_nodes, adjacency = self._extract_reachable_subgraph(
+            start_node_id, nodes, edges
+        )
+        
+        # Get topological order
+        execution_order = self._topological_sort(reachable_nodes, adjacency)
+        
+        # Filter execution order to only include reachable nodes
+        execution_order = [node for node in execution_order if node in reachable_nodes]
+        
+        # Initialize tracking
+        start_time = time.time()
+        execution_results = {}
+        node_outputs = {}
+        result_nodes = {}
+        
+        # Send initial event
+        yield {
+            "type": "start",
+            "total_nodes": len(execution_order),
+            "execution_order": execution_order,
+            "timestamp": time.time()
+        }
+        
+        # Execute nodes in order
+        for idx, node_id in enumerate(execution_order):
+            node_data = nodes[node_id]
+            
+            # Prepare input data
+            input_data = None
+            target_handles = {}
+            
+            # Collect inputs from edges
+            incoming_edges = [
+                {
+                    "source": edge["source"],
+                    "targetHandle": edge.get("targetHandle"),
+                    "sourceHandle": edge.get("sourceHandle")
+                }
+                for edge in edges
+                if edge["target"] == node_id and edge["source"] in node_outputs
+            ]
+            
+            if incoming_edges:
+                if len(incoming_edges) == 1:
+                    # Single input
+                    edge_info = incoming_edges[0]
+                    source = edge_info["source"]
+                    source_output = node_outputs[source]
+                    
+                    # Extract value based on sourceHandle
+                    value = source_output
+                    if isinstance(source_output, dict) and edge_info["sourceHandle"]:
+                        if edge_info["sourceHandle"] in source_output:
+                            value = source_output[edge_info["sourceHandle"]]
+                    
+                    # If targetHandle is specified, wrap in dict
+                    if edge_info["targetHandle"]:
+                        input_data = {edge_info["targetHandle"]: value}
+                        target_handles[source] = edge_info["targetHandle"]
+                    else:
+                        input_data = value
+                else:
+                    # Multiple inputs
+                    input_data = {}
+                    for edge_info in incoming_edges:
+                        source = edge_info["source"]
+                        source_output = node_outputs.get(source)
+                        
+                        if source_output is None:
+                            continue
+                        
+                        # Extract specific output if sourceHandle specified
+                        value = source_output
+                        if isinstance(source_output, dict) and edge_info["sourceHandle"]:
+                            if edge_info["sourceHandle"] in source_output:
+                                value = source_output[edge_info["sourceHandle"]]
+                        
+                        # Use targetHandle as key if specified
+                        if edge_info["targetHandle"]:
+                            input_data[edge_info["targetHandle"]] = value
+                            target_handles[source] = edge_info["targetHandle"]
+                        else:
+                            input_data[f"input_{source}"] = value
+            elif node_id == start_node_id and params:
+                input_data = params
+            
+            # Execute node
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                self._execute_node_isolated,
+                project_id,
+                node_id,
+                nodes[node_id],
+                input_data,
+                timeout_sec,
+                target_handles if target_handles else None,
+                result_node_values,
+            )
+            
+            execution_results[node_id] = result
+            
+            # Store output for downstream nodes
+            if result["status"] == "success":
+                node_outputs[node_id] = result.get("output")
+                
+                # Handle result nodes
+                if node_data.get("type") == "result":
+                    result_nodes[node_id] = result.get("output")
+            
+            # Yield node completion event
+            yield {
+                "type": "node_complete",
+                "node_id": node_id,
+                "node_title": node_data.get("title", "Unknown"),
+                "node_index": idx + 1,
+                "total_nodes": len(execution_order),
+                "result": result,
+                "timestamp": time.time()
+            }
+            
+            # Check if we should halt on error
+            if halt_on_error and result["status"] == "error":
+                # Send error event
+                yield {
+                    "type": "error",
+                    "error": f"Node {node_id} failed: {result.get('error')}",
+                    "node_id": node_id,
+                    "timestamp": time.time()
+                }
+                break
+        
+        # Send completion event
+        total_time = round((time.time() - start_time) * 1000)
+        yield {
+            "type": "complete",
+            "execution_results": execution_results,
+            "result_nodes": result_nodes,
+            "execution_order": execution_order,
+            "total_execution_time_ms": total_time,
+            "timestamp": time.time()
+        }
+    
     def get_store_info(self, project_id: str) -> Dict:
         """Get information about the object store for debugging"""
         

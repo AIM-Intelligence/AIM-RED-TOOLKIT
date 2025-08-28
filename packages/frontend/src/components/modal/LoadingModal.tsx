@@ -54,7 +54,7 @@ export default function LoadingModal({
       onClick={handleBackgroundClick}
     >
       <div
-        className={`rounded-xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp ${
+        className={`bg-neutral-800 rounded-xl p-8 shadow-[0_20px_60px_rgba(0,0,0,0.8)] animate-slideUp ${
           status === "error" && notice.errorDetails
             ? "max-w-2xl max-h-[80vh] overflow-auto"
             : ""

@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Literal
+import json
+import asyncio
 from ..core import (
     project_operations,
     project_structure,
@@ -294,6 +297,47 @@ async def execute_flow(request: ExecuteFlowRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Flow execution failed: {str(e)}")
+
+
+@router.post("/execute-flow-stream")
+async def execute_flow_stream(request: ExecuteFlowRequest):
+    """Execute the node flow with streaming results via SSE"""
+    async def event_generator():
+        try:
+            executor = get_executor()
+            
+            # Execute flow with streaming
+            async for node_result in executor.execute_flow_streaming(
+                project_id=request.project_id,
+                start_node_id=request.start_node_id,
+                params=request.params,
+                result_node_values=request.result_node_values,
+                max_workers=request.max_workers,
+                timeout_sec=request.timeout_sec,
+                halt_on_error=request.halt_on_error
+            ):
+                # Send each node result as SSE event
+                event_data = json.dumps(node_result)
+                yield f"data: {event_data}\n\n"
+                await asyncio.sleep(0.01)  # Small delay to ensure proper streaming
+                
+        except Exception as e:
+            # Send error event
+            error_event = json.dumps({
+                "type": "error",
+                "error": str(e)
+            })
+            yield f"data: {error_event}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # Disable Nginx buffering
+            "Connection": "keep-alive"
+        }
+    )
 
 
 @router.post("/analyze-flow")
