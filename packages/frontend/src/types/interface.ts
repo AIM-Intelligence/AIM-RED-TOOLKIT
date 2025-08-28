@@ -25,6 +25,7 @@ export interface NodeData {
   inputs?: PortInfo[];         // Input ports
   outputs?: PortInfo[];        // Output ports
   viewCode?: () => void;       // Handler for view code button
+  updateKey?: number;          // Force re-render when changed
 }
 
 export interface EdgeMarkerEnd {

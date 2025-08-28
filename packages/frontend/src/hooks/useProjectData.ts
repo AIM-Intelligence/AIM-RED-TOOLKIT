@@ -92,7 +92,7 @@ export function useProjectData(
                     ...baseData,
                     file: node.data.file,
                     viewCode: () => {
-                      onNodeClick(node.id, node.data.title || `Node ${node.id}`);
+                      onNodeClick(node.id, node.data.title || `Node ${node.id}`, node.data.file);
                     },
                   },
                 } as DefaultNodeType;

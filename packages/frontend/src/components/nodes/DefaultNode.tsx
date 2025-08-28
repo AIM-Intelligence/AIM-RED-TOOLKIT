@@ -1,5 +1,5 @@
-import { useState, useMemo, useLayoutEffect } from "react";
-import { Handle, Position, type NodeProps, type Node } from "@xyflow/react";
+import { useState, useMemo, useLayoutEffect, useEffect } from "react";
+import { Handle, Position, useUpdateNodeInternals, type NodeProps, type Node } from "@xyflow/react";
 import clsx from "clsx";
 import LoadingModal from "../modal/LoadingModal";
 import type { NodeData } from "../../types";
@@ -34,6 +34,7 @@ const ROW_GAP = Math.max(0, PORT_SPACING - ROW_H); // => ROW_H + ROW_GAP = PORT_
 
 export default function DefaultNode(props: NodeProps & { data: NodeData }) {
   const [hovering, setHovering] = useState(false);
+  const updateNodeInternals = useUpdateNodeInternals();
   const [modalState, setModalState] = useState<{
     isOpen: boolean;
     status: "loading" | "success" | "error";
@@ -50,8 +51,15 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
   const [inW, setInW] = useState(0);
   const [outW, setOutW] = useState(0);
   const [titleW, setTitleW] = useState(0);
-
+  
   useLayoutEffect(() => {
+    // Log updates for debugging
+    if (props.data.updateKey) {
+      console.log(`Node ${props.id} re-measuring, updateKey: ${props.data.updateKey}`);
+      console.log('Inputs:', props.data.inputs);
+      console.log('Outputs:', props.data.outputs);
+    }
+    
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     const font =
@@ -73,7 +81,14 @@ export default function DefaultNode(props: NodeProps & { data: NodeData }) {
     // Measure title width
     const title = props.data.title || "Node";
     setTitleW(measure(title));
-  }, [props.data.inputs, props.data.outputs, props.data.title]);
+  }, [props.data.inputs, props.data.outputs, props.data.title, props.data.updateKey]);
+
+  // 포트가 변경될 때 React Flow 내부 업데이트
+  useLayoutEffect(() => {
+    // DOM이 업데이트된 후 React Flow에 핸들 위치 업데이트 알림
+    console.log(`Node ${props.id} ports updated, updating internals`);
+    updateNodeInternals(props.id);
+  }, [props.data.inputs, props.data.outputs, props.data.updateKey, props.id, updateNodeInternals]);
 
   /** 가로폭 계산 */
   const contentWidth = useMemo(() => {

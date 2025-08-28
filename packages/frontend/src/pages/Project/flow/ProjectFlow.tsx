@@ -1,10 +1,12 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useEffect, type ReactNode } from "react";
 import {
   ReactFlow,
   MiniMap,
   Background,
   BackgroundVariant,
   Panel,
+  ReactFlowProvider,
+  useReactFlow,
   type NodeTypes,
   type EdgeTypes,
   type Edge,
@@ -34,7 +36,8 @@ interface ProjectFlowProps {
   children?: ReactNode;
 }
 
-export default function ProjectFlow({
+// Inner component that has access to React Flow context
+function ProjectFlowInner({
   nodes,
   edges,
   onNodesChange,
@@ -43,6 +46,38 @@ export default function ProjectFlow({
   isValidConnection,
   children,
 }: ProjectFlowProps) {
+  const { updateNodeInternals } = useReactFlow();
+  
+  // Listen for custom event to update node internals
+  useEffect(() => {
+    const handleForceUpdate = (event: CustomEvent) => {
+      const { nodeId } = event.detail;
+      console.log(`Updating node internals for ${nodeId} from ProjectFlow`);
+      
+      // 여러 시점에 업데이트하여 확실히 적용
+      updateNodeInternals(nodeId);
+      
+      // DOM 렌더링 후 추가 업데이트
+      requestAnimationFrame(() => {
+        updateNodeInternals(nodeId);
+      });
+      
+      // 추가 지연 후 한 번 더 업데이트
+      setTimeout(() => {
+        updateNodeInternals(nodeId);
+      }, 100);
+      
+      setTimeout(() => {
+        updateNodeInternals(nodeId);
+      }, 300);
+    };
+    
+    window.addEventListener('forceUpdateNodeInternals' as any, handleForceUpdate);
+    return () => {
+      window.removeEventListener('forceUpdateNodeInternals' as any, handleForceUpdate);
+    };
+  }, [updateNodeInternals]);
+
   // Define node types
   const nodeTypes = useMemo<NodeTypes>(
     () => ({
@@ -67,10 +102,7 @@ export default function ProjectFlow({
   };
 
   return (
-    <div
-      style={{ width: "100vw", height: "100vh", backgroundColor: "#0a0a0a" }}
-    >
-      <ReactFlow
+    <ReactFlow
         nodes={nodes}
         edges={edges}
         onNodesChange={onNodesChange}
@@ -115,6 +147,18 @@ export default function ProjectFlow({
           </Panel>
         )}
       </ReactFlow>
+  );
+}
+
+// Main component that wraps everything in ReactFlowProvider
+export default function ProjectFlow(props: ProjectFlowProps) {
+  return (
+    <div
+      style={{ width: "100vw", height: "100vh", backgroundColor: "#0a0a0a" }}
+    >
+      <ReactFlowProvider>
+        <ProjectFlowInner {...props} />
+      </ReactFlowProvider>
     </div>
   );
 }

@@ -23,9 +23,11 @@ export default function Project() {
   const [selectedNodeData, setSelectedNodeData] = useState<{
     nodeId: string;
     title: string;
+    file?: string;
   }>({
     nodeId: "1",
     title: "Python IDE",
+    file: undefined,
   });
   const [nodeIdCounter, setNodeIdCounter] = useState(1);
 
@@ -40,10 +42,11 @@ export default function Project() {
   }, [toastMessage, setToastMessage]);
 
   // Handle node click
-  const handleNodeClick = useCallback((nodeId: string, title: string) => {
+  const handleNodeClick = useCallback((nodeId: string, title: string, file?: string) => {
     setSelectedNodeData({
       nodeId,
       title,
+      file,
     });
     setIsIdeModalOpen(true);
   }, []);
@@ -167,7 +170,7 @@ export default function Project() {
               title: component.name,
               description: component.description,
               file: result.file_name || `${newNodeId}_${component.name.replace(/\s+/g, '_')}.py`,
-              viewCode: () => handleNodeClick(newNodeId, component.name),
+              viewCode: () => handleNodeClick(newNodeId, component.name, result.file_name || `${newNodeId}_${component.name.replace(/\s+/g, '_')}.py`),
               inputs: inputs,
               outputs: outputs,
             }
@@ -246,6 +249,7 @@ export default function Project() {
         projectId={projectId}
         nodeId={selectedNodeData.nodeId}
         nodeTitle={selectedNodeData.title}
+        nodeFile={selectedNodeData.file}
       />
     </>
   );

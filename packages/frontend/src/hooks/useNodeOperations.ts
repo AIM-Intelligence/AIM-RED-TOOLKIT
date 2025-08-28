@@ -71,43 +71,74 @@ export function useNodeOperations({
         currentNodes.map((node) => {
           if (node.id === nodeId) {
             console.log(`Updating node ${nodeId} with metadata:`, metadata);
+            
             // Convert metadata inputs/outputs to PortInfo format
-            const inputs = metadata.inputs?.map((input: any) => ({
-              id: input.name,
-              label: input.name,
-              type: input.type,
-              required: input.required !== false,
-              default: input.default,
-            }));
+            // Only update if metadata has valid inputs/outputs
+            const hasValidInputs = metadata.inputs && Array.isArray(metadata.inputs) && metadata.inputs.length > 0;
+            const hasValidOutputs = metadata.outputs && Array.isArray(metadata.outputs) && metadata.outputs.length > 0;
             
-            const outputs = metadata.outputs?.map((output: any) => ({
-              id: output.name,
-              label: output.name,
-              type: output.type,
-              required: false,
-              default: undefined,
-            }));
+            const inputs = hasValidInputs 
+              ? metadata.inputs.map((input: any) => ({
+                  id: input.name,
+                  label: input.name,
+                  type: input.type,
+                  required: input.required !== false,
+                  default: input.default,
+                }))
+              : node.data.inputs; // Keep existing inputs if metadata is empty
             
-            return {
+            const outputs = hasValidOutputs
+              ? metadata.outputs.map((output: any) => ({
+                  id: output.name,
+                  label: output.name,
+                  type: output.type,
+                  required: false,
+                  default: undefined,
+                }))
+              : node.data.outputs; // Keep existing outputs if metadata is empty
+            
+            console.log("Processed inputs:", inputs);
+            console.log("Processed outputs:", outputs);
+            
+            // Create a completely new node object to force re-render
+            const updatedNode = {
               ...node,
               data: {
                 ...node.data,
-                mode: metadata.mode,
+                mode: metadata.mode || node.data.mode,
                 inputs: inputs,
                 outputs: outputs,
+                // Add updateKey to force component re-render
+                updateKey: Date.now(),
               },
+              // Force React Flow to update by changing a property it watches
+              selected: node.selected,
+              position: { ...node.position },
             };
+            
+            console.log("Updated node with new data:", updatedNode);
+            return updatedNode;
           }
           return node;
         })
       );
+      
+      // 엣지 재계산을 위해 강제 업데이트 이벤트 발생
+      // DOM 업데이트가 완료된 후 실행되도록 더 긴 지연 시간 설정
+      setTimeout(() => {
+        console.log(`Forcing edge recalculation for node ${nodeId}`);
+        // 커스텀 이벤트 발생
+        window.dispatchEvent(new CustomEvent('forceUpdateNodeInternals', {
+          detail: { nodeId }
+        }));
+      }, 300);
     };
 
     window.addEventListener("updateNodePorts" as any, handleUpdateNodePorts);
     return () => {
       window.removeEventListener("updateNodePorts" as any, handleUpdateNodePorts);
     };
-  }, [setNodes]);
+  }, [setNodes, setEdges]);
 
   // Custom handler for node changes that persists position updates
   const onNodesChange = useCallback<OnNodesChange<AnyNodeType>>(

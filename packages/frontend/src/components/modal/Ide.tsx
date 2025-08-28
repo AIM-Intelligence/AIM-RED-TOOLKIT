@@ -13,6 +13,7 @@ interface IdeModalProps {
   projectId: string;
   nodeId: string;
   nodeTitle: string;
+  nodeFile?: string;
   initialCode?: string;
 }
 
@@ -22,6 +23,7 @@ const IdeModal: React.FC<IdeModalProps> = ({
   projectId,
   nodeId,
   nodeTitle,
+  nodeFile,
   initialCode = "",
 }) => {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -43,10 +45,12 @@ const IdeModal: React.FC<IdeModalProps> = ({
     if (!projectId || !nodeId) return;
 
     try {
+      // Use the actual file name from node data if available
+      const fileName = nodeFile || `${nodeId}_${nodeTitle.replace(/\s+/g, '_')}.py`;
       const result = await codeApi.getNodeMetadata({
         project_id: projectId,
         node_id: nodeId,
-        node_data: { data: { file: `${nodeId}_${nodeTitle.replace(/\s+/g, '_')}.py` } }
+        node_data: { data: { file: fileName } }
       });
 
       if (result.success && result.metadata) {
@@ -104,24 +108,35 @@ const IdeModal: React.FC<IdeModalProps> = ({
         
         // Fetch updated metadata after saving
         try {
+          // Use the actual file name from node data if available
+          const fileName = nodeFile || `${nodeId}_${nodeTitle.replace(/\s+/g, '_')}.py`;
           const metadataResult = await codeApi.getNodeMetadata({
             project_id: projectId,
             node_id: nodeId,
-            node_data: { data: { file: `${nodeId}_${nodeTitle.replace(/\s+/g, '_')}.py` } }
+            node_data: { data: { file: fileName } }
           });
           
           if (metadataResult.success && metadataResult.metadata) {
             setNodeMetadata(metadataResult.metadata);
-            // Emit custom event to update node ports in the flow
-            const updateEvent = new CustomEvent("updateNodePorts", {
-              detail: {
-                nodeId: nodeId,
-                metadata: metadataResult.metadata
-              },
-              bubbles: true,
-            });
-            console.log("Dispatching updateNodePorts event:", updateEvent.detail);
-            window.dispatchEvent(updateEvent);
+            console.log("Metadata fetched after save:", metadataResult.metadata);
+            console.log("Inputs:", metadataResult.metadata.inputs);
+            console.log("Outputs:", metadataResult.metadata.outputs);
+            
+            // Emit custom event to update node ports in the flow with slight delay
+            setTimeout(() => {
+              const updateEvent = new CustomEvent("updateNodePorts", {
+                detail: {
+                  nodeId: nodeId,
+                  metadata: metadataResult.metadata,
+                  timestamp: Date.now()
+                },
+                bubbles: true,
+              });
+              console.log("Dispatching updateNodePorts event:", updateEvent.detail);
+              window.dispatchEvent(updateEvent);
+            }, 100); // Small delay to ensure save is fully processed
+          } else {
+            console.warn("Failed to fetch metadata or metadata is empty:", metadataResult);
           }
         } catch (metadataError) {
           console.error("Error fetching metadata after save:", metadataError);
