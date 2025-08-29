@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any, Literal
 import json
 import asyncio
+from pathlib import Path
 from ..core import (
     project_operations,
     project_structure,
@@ -18,6 +19,9 @@ router = APIRouter()
 
 # Global executor instance to maintain object store across requests
 _global_executor = None
+
+# Constants
+PROJECTS_DIR = "projects"
 
 def get_executor():
     """Get or create the global executor instance"""
@@ -367,3 +371,57 @@ async def analyze_flow(request: AnalyzeFlowRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Flow analysis failed: {str(e)}")
+
+@router.put("/updateedge")
+async def update_edge(request: dict):
+    """
+    Update edge handles when node ports change.
+    """
+    try:
+        project_id = request.get('project_id')
+        edge_id = request.get('edge_id')
+        source_handle = request.get('source_handle')
+        target_handle = request.get('target_handle')
+        
+        if not project_id or not edge_id:
+            raise ValueError("project_id and edge_id are required")
+        
+        # Load project structure
+        project_path = Path(PROJECTS_DIR) / project_id
+        structure_file = project_path / "structure.json"
+        
+        if not structure_file.exists():
+            raise ValueError(f"Project {project_id} not found")
+        
+        with open(structure_file, 'r') as f:
+            structure = json.load(f)
+        
+        # Find and update the edge
+        edges = structure.get('edges', [])
+        edge_found = False
+        
+        for edge in edges:
+            if edge['id'] == edge_id:
+                if source_handle is not None:
+                    edge['sourceHandle'] = source_handle
+                if target_handle is not None:
+                    edge['targetHandle'] = target_handle
+                edge_found = True
+                break
+        
+        if not edge_found:
+            raise ValueError(f"Edge {edge_id} not found")
+        
+        # Save updated structure
+        with open(structure_file, 'w') as f:
+            json.dump(structure, f, indent=2)
+        
+        return {
+            "success": True,
+            "message": f"Edge {edge_id} updated successfully"
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update edge: {str(e)}")

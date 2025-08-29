@@ -152,9 +152,11 @@ def get_node_code(project_id: str, node_id: str) -> str:
         return f.read()
 
 def save_node_code(project_id: str, node_id: str, code: str) -> Dict[str, Any]:
-    """Save code to a node's python file"""
+    """Save code to a node's python file with automatic variable renaming"""
     from .project_operations import get_project_path
     from .project_structure import get_project_structure
+    import ast
+    import re
     
     project_path = get_project_path(project_id)
     structure = get_project_structure(project_id)
@@ -169,12 +171,57 @@ def save_node_code(project_id: str, node_id: str, code: str) -> Dict[str, Any]:
     if not node:
         raise ValueError(f"Node with ID '{node_id}' not found")
     
-    # Write to python file (file reference is now in data)
+    # Get file path
     file_name = node.get('data', {}).get('file')
     if not file_name:
         raise ValueError(f"Node '{node_id}' does not have an associated file")
     
     py_filepath = project_path / file_name
+    
+    # Get the old code to compare parameters
+    old_code = ""
+    if py_filepath.exists():
+        with open(py_filepath, 'r') as f:
+            old_code = f.read()
+    
+    # Parse and compare function parameters
+    try:
+        # Parse old and new code
+        old_tree = ast.parse(old_code) if old_code else None
+        new_tree = ast.parse(code)
+        
+        # Find RunScript function in both
+        old_params = []
+        new_params = []
+        
+        if old_tree:
+            for node in ast.walk(old_tree):
+                if isinstance(node, ast.FunctionDef) and node.name == 'RunScript':
+                    old_params = [arg.arg for arg in node.args.args]
+                    break
+        
+        for node in ast.walk(new_tree):
+            if isinstance(node, ast.FunctionDef) and node.name == 'RunScript':
+                new_params = [arg.arg for arg in node.args.args]
+                break
+        
+        # If parameters changed, update variable names in the code
+        if old_params and new_params and len(old_params) == len(new_params):
+            modified_code = code
+            for old_param, new_param in zip(old_params, new_params):
+                if old_param != new_param:
+                    # Find the function body and replace old parameter name with new one
+                    # Use word boundaries to avoid partial replacements
+                    pattern = r'\b' + re.escape(old_param) + r'\b'
+                    modified_code = re.sub(pattern, new_param, modified_code)
+                    print(f"Renamed variable: {old_param} -> {new_param}")
+            code = modified_code
+    
+    except (SyntaxError, Exception) as e:
+        # If parsing fails, just save the code as-is
+        print(f"Warning: Could not parse code for automatic variable renaming: {e}")
+    
+    # Write the updated code
     with open(py_filepath, 'w') as f:
         f.write(code)
     

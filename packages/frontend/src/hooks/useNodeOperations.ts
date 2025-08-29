@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { unstable_batchedUpdates } from "react-dom";
 import {
   useNodesState,
   useEdgesState,
@@ -47,9 +48,10 @@ export function useNodeOperations({
   onNodeClick,
 }: UseNodeOperationsProps): UseNodeOperationsReturn {
   const [nodes, setNodes, onNodesChangeInternal] =
-    useNodesState<AnyNodeType>(initialNodes);
+    useNodesState<AnyNodeType>(initialNodes as any);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initialEdges);
   const positionUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPortUpdateRef = useRef<{ nodeId: string; timestamp: number; hash: string } | null>(null);
 
   // Update nodes when initialNodes change
   useEffect(() => {
@@ -61,90 +63,272 @@ export function useNodeOperations({
     setEdges(initialEdges);
   }, [initialEdges, setEdges]);
 
+  // Type for tracking edge relinks
+  type Relink = { 
+    edgeId: string; 
+    side: 'source' | 'target'; 
+    newHandle: string;
+  };
+
   // Listen for node port updates
   useEffect(() => {
     const handleUpdateNodePorts = (event: CustomEvent) => {
       const { nodeId, metadata } = event.detail;
-      console.log("Received updateNodePorts event:", { nodeId, metadata });
       
-      setNodes((currentNodes) => 
-        currentNodes.map((node) => {
+      // Deduplicate events - ignore if same update within 100ms
+      const eventHash = JSON.stringify({ nodeId, inputs: metadata.inputs, outputs: metadata.outputs });
+      const now = Date.now();
+      
+      if (lastPortUpdateRef.current) {
+        const { nodeId: lastNodeId, timestamp, hash } = lastPortUpdateRef.current;
+        if (lastNodeId === nodeId && hash === eventHash && (now - timestamp) < 100) {
+          console.log(`Skipping duplicate updateNodePorts event for node ${nodeId}`);
+          return;
+        }
+      }
+      
+      lastPortUpdateRef.current = { nodeId, timestamp: now, hash: eventHash };
+      console.log("Processing updateNodePorts event:", { nodeId, metadata });
+      
+      // Process metadata
+      const hasValidInputs = metadata.inputs && Array.isArray(metadata.inputs) && metadata.inputs.length > 0;
+      const hasValidOutputs = metadata.outputs && Array.isArray(metadata.outputs) && metadata.outputs.length > 0;
+      
+      if (!hasValidInputs && !hasValidOutputs) {
+        return; // Nothing to update
+      }
+      
+      const newInputs = hasValidInputs ? metadata.inputs : [];
+      const newOutputs = hasValidOutputs ? metadata.outputs : [];
+      
+      // Get current node to see old ports
+      let oldInputs: any[] = [];
+      let oldOutputs: any[] = [];
+      
+      setNodes((currentNodes) => {
+        const node = currentNodes.find(n => n.id === nodeId);
+        if (node?.data) {
+          oldInputs = (node.data as any).inputs || [];
+          oldOutputs = (node.data as any).outputs || [];
+        }
+        return currentNodes; // Return unchanged
+      });
+      
+      // Create mapping from old to new handle names
+      const inputMapping = new Map<string, string>();
+      const outputMapping = new Map<string, string>();
+      
+      // Map by position when counts match (use name as both old and new ID)
+      if (oldInputs.length === newInputs.length) {
+        oldInputs.forEach((old, i) => {
+          if (newInputs[i]) {
+            // Map from old id to new name (which becomes the new id)
+            inputMapping.set(old.id, newInputs[i].name);
+          }
+        });
+      } else if (newInputs.length === 1 && oldInputs.length > 0) {
+        // If only one new input, map all old to it
+        oldInputs.forEach(old => {
+          inputMapping.set(old.id, newInputs[0].name);
+        });
+      }
+      
+      if (oldOutputs.length === newOutputs.length) {
+        oldOutputs.forEach((old, i) => {
+          if (newOutputs[i]) {
+            // Map from old id to new name (which becomes the new id)
+            outputMapping.set(old.id, newOutputs[i].name);
+          }
+        });
+      } else if (newOutputs.length === 1 && oldOutputs.length > 0) {
+        // If only one new output, map all old to it
+        oldOutputs.forEach(old => {
+          outputMapping.set(old.id, newOutputs[0].name);
+        });
+      }
+      
+      // Track edges that need relinking after DOM update
+      const relinks: Relink[] = [];
+      
+      // Prepare the new nodes data
+      const nextNodesProducer = (nodes: AnyNodeType[]) => {
+        return nodes.map((node) => {
           if (node.id === nodeId) {
             console.log(`Updating node ${nodeId} with metadata:`, metadata);
             
-            // Convert metadata inputs/outputs to PortInfo format
-            // Only update if metadata has valid inputs/outputs
-            const hasValidInputs = metadata.inputs && Array.isArray(metadata.inputs) && metadata.inputs.length > 0;
-            const hasValidOutputs = metadata.outputs && Array.isArray(metadata.outputs) && metadata.outputs.length > 0;
-            
             const inputs = hasValidInputs 
               ? metadata.inputs.map((input: any) => ({
-                  id: input.name,
+                  id: input.name, // ID is set to name value - this is what Handle will use
                   label: input.name,
                   type: input.type,
                   required: input.required !== false,
                   default: input.default,
                 }))
-              : node.data.inputs; // Keep existing inputs if metadata is empty
+              : (node.data as any).inputs;
             
             const outputs = hasValidOutputs
               ? metadata.outputs.map((output: any) => ({
-                  id: output.name,
+                  id: output.name, // ID is set to name value - this is what Handle will use
                   label: output.name,
                   type: output.type,
                   required: false,
                   default: undefined,
                 }))
-              : node.data.outputs; // Keep existing outputs if metadata is empty
+              : (node.data as any).outputs;
             
-            console.log("Processed inputs:", inputs);
-            console.log("Processed outputs:", outputs);
-            
-            // Create a completely new node object to force re-render
-            const updatedNode = {
+            return {
               ...node,
               data: {
                 ...node.data,
-                mode: metadata.mode || node.data.mode,
+                mode: metadata.mode || (node.data as any).mode,
                 inputs: inputs,
                 outputs: outputs,
-                // Add updateKey to force component re-render
-                updateKey: Date.now(),
+                updateKey: Date.now(), // Force re-render
               },
-              // Force React Flow to update by changing a property it watches
-              selected: node.selected,
-              position: { ...node.position },
             };
-            
-            console.log("Updated node with new data:", updatedNode);
-            return updatedNode;
           }
           return node;
-        })
-      );
+        });
+      };
       
-      // 엣지 재계산을 위해 강제 업데이트 이벤트 발생
-      // DOM 업데이트가 완료된 후 실행되도록 더 긴 지연 시간 설정
-      setTimeout(() => {
-        console.log(`Forcing edge recalculation for node ${nodeId}`);
-        // 커스텀 이벤트 발생
-        window.dispatchEvent(new CustomEvent('forceUpdateNodeInternals', {
-          detail: { nodeId }
-        }));
-      }, 300);
+      // Phase 1: Neutralize edges (remove handles that will be remapped)
+      const nextEdgesPhase1 = (edges: Edge[]) => {
+        return edges.map((edge) => {
+          let updatedEdge = { ...edge };
+          
+          // Check target handle
+          if (edge.target === nodeId && edge.targetHandle) {
+            const newHandle = inputMapping.get(edge.targetHandle);
+            if (newHandle && newHandle !== edge.targetHandle) {
+              // Neutralize: remove handle temporarily
+              console.log(`Phase 1: Neutralizing edge ${edge.id} targetHandle: ${edge.targetHandle}`);
+              relinks.push({ 
+                edgeId: edge.id, 
+                side: 'target', 
+                newHandle: newHandle 
+              });
+              updatedEdge.targetHandle = undefined;
+            } else if (!newHandle) {
+              // Check if handle already exists in new inputs
+              const alreadyValid = newInputs.some((input: any) => input.name === edge.targetHandle);
+              if (!alreadyValid) {
+                console.warn(`Edge ${edge.id} has unmapped target handle: ${edge.targetHandle}`);
+                updatedEdge.targetHandle = undefined;
+              }
+            }
+          }
+          
+          // Check source handle
+          if (edge.source === nodeId && edge.sourceHandle) {
+            const newHandle = outputMapping.get(edge.sourceHandle);
+            if (newHandle && newHandle !== edge.sourceHandle) {
+              // Neutralize: remove handle temporarily
+              console.log(`Phase 1: Neutralizing edge ${edge.id} sourceHandle: ${edge.sourceHandle}`);
+              relinks.push({ 
+                edgeId: edge.id, 
+                side: 'source', 
+                newHandle: newHandle 
+              });
+              updatedEdge.sourceHandle = undefined;
+            } else if (!newHandle) {
+              // Check if handle already exists in new outputs
+              const alreadyValid = newOutputs.some((output: any) => output.name === edge.sourceHandle);
+              if (!alreadyValid) {
+                console.warn(`Edge ${edge.id} has unmapped source handle: ${edge.sourceHandle}`);
+                updatedEdge.sourceHandle = undefined;
+              }
+            }
+          }
+          
+          return updatedEdge;
+        });
+      };
+      
+      // Phase 1: Apply node updates and neutralize edges in single batch
+      unstable_batchedUpdates(() => {
+        setNodes(nextNodesProducer);  // Update node ports (new handles in DOM)
+        setEdges(nextEdgesPhase1);    // Neutralize edges (remove old handles)
+      });
+      
+      // Frame 1: Trigger updateNodeInternals after DOM update
+      requestAnimationFrame(() => {
+        console.log(`Frame 1: Triggering updateNodeInternals for node ${nodeId}`);
+        const updateInternalsEvent = new CustomEvent("reactFlowUpdateNodeInternals", {
+          detail: { nodeId },
+          bubbles: true,
+        });
+        window.dispatchEvent(updateInternalsEvent);
+        
+        // Frame 2: Reattach handles to edges after internals are updated
+        requestAnimationFrame(() => {
+          console.log(`Frame 2: Reattaching ${relinks.length} edge handles`);
+          
+          if (relinks.length > 0) {
+            // Phase 2: Reattach new handles to edges
+            setEdges((edges) => {
+              return edges.map((edge) => {
+                // Find relink instructions for this edge
+                const targetRelink = relinks.find(r => r.edgeId === edge.id && r.side === 'target');
+                const sourceRelink = relinks.find(r => r.edgeId === edge.id && r.side === 'source');
+                
+                if (!targetRelink && !sourceRelink) {
+                  return edge; // No changes needed
+                }
+                
+                // Reattach handles
+                const reattached = {
+                  ...edge,
+                  targetHandle: targetRelink ? targetRelink.newHandle : edge.targetHandle,
+                  sourceHandle: sourceRelink ? sourceRelink.newHandle : edge.sourceHandle,
+                };
+                
+                if (targetRelink) {
+                  console.log(`Phase 2: Reattached edge ${edge.id} targetHandle: ${targetRelink.newHandle}`);
+                }
+                if (sourceRelink) {
+                  console.log(`Phase 2: Reattached edge ${edge.id} sourceHandle: ${sourceRelink.newHandle}`);
+                }
+                
+                return reattached;
+              });
+            });
+            
+            // Update backend with edge changes
+            if (projectId) {
+              relinks.forEach(relink => {
+                // Find the edge to get both handles
+                setEdges((edges) => {
+                  const edge = edges.find(e => e.id === relink.edgeId);
+                  if (edge) {
+                    projectApi.updateEdge({
+                      project_id: projectId,
+                      edge_id: edge.id,
+                      source_handle: edge.sourceHandle,
+                      target_handle: edge.targetHandle,
+                    }).catch(error => {
+                      console.error(`Failed to update edge ${edge.id} in backend:`, error);
+                    });
+                  }
+                  return edges; // Return unchanged
+                });
+              });
+            }
+          }
+        });
+      });
     };
 
     window.addEventListener("updateNodePorts" as any, handleUpdateNodePorts);
     return () => {
       window.removeEventListener("updateNodePorts" as any, handleUpdateNodePorts);
     };
-  }, [setNodes, setEdges]);
+  }, [setNodes, setEdges, projectId]);
 
   // Custom handler for node changes that persists position updates
   const onNodesChange = useCallback<OnNodesChange<AnyNodeType>>(
     (changes: NodeChange<AnyNodeType>[]) => {
       // Apply changes to local state first
-      onNodesChangeInternal(changes);
+      onNodesChangeInternal(changes as any);
 
       // Check if any position changes occurred
       const positionChanges = changes.filter(

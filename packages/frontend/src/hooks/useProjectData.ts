@@ -101,6 +101,7 @@ export function useProjectData(
           );
 
           // Transform backend edges to ReactFlow format
+          // Initially hide edges to prevent React Flow warnings during metadata loading
           const edges: Edge[] = project.edges.map((edge: ProjectEdge) => ({
             id: edge.id,
             type: edge.type || "custom",
@@ -116,6 +117,7 @@ export function useProjectData(
               : {
                   type: "arrowclosed" as MarkerType,
                 },
+            hidden: true, // Hide initially to prevent warnings
           }));
 
           // Fetch metadata for custom nodes
@@ -128,8 +130,6 @@ export function useProjectData(
                     node_id: node.id,
                     node_data: { data: node.data }
                   });
-                  
-                  console.log(`Metadata for node ${node.id}:`, metadataResult);
                   
                   if (metadataResult.success && metadataResult.metadata) {
                     const metadata = metadataResult.metadata;
@@ -171,7 +171,70 @@ export function useProjectData(
           );
 
           setTransformedNodes(nodesWithMetadata);
-          setTransformedEdges(edges);
+          
+          // Validate edges against actual node ports before showing them
+          const validatedEdges = edges.map(edge => {
+            let validatedEdge = { ...edge, hidden: false };
+            let handleChanged = false;
+            
+            // Find nodes to check their actual ports
+            const targetNode = nodesWithMetadata.find(n => n.id === edge.target);
+            const sourceNode = nodesWithMetadata.find(n => n.id === edge.source);
+            
+            // Validate target handle
+            if (edge.targetHandle && targetNode?.type === 'custom') {
+              const targetInputs = (targetNode.data as any).inputs || [];
+              const targetHandleExists = targetInputs.some((input: any) => 
+                input.id === edge.targetHandle
+              );
+              
+              if (!targetHandleExists) {
+                if (targetInputs.length > 0) {
+                  // Map to first available input
+                  console.warn(`Edge ${edge.id} has invalid targetHandle "${edge.targetHandle}", mapping to "${targetInputs[0].id}"`);
+                  validatedEdge.targetHandle = targetInputs[0].id;
+                  handleChanged = true;
+                } else {
+                  console.warn(`Edge ${edge.id} has invalid targetHandle "${edge.targetHandle}" and no inputs available`);
+                  validatedEdge.targetHandle = undefined;
+                  handleChanged = true;
+                }
+              }
+            }
+            
+            // Validate source handle
+            if (edge.sourceHandle && sourceNode?.type === 'custom') {
+              const sourceOutputs = (sourceNode.data as any).outputs || [];
+              const sourceHandleExists = sourceOutputs.some((output: any) => 
+                output.id === edge.sourceHandle
+              );
+              
+              if (!sourceHandleExists) {
+                if (sourceOutputs.length > 0) {
+                  // Map to first available output
+                  console.warn(`Edge ${edge.id} has invalid sourceHandle "${edge.sourceHandle}", mapping to "${sourceOutputs[0].id}"`);
+                  validatedEdge.sourceHandle = sourceOutputs[0].id;
+                  handleChanged = true;
+                } else {
+                  console.warn(`Edge ${edge.id} has invalid sourceHandle "${edge.sourceHandle}" and no outputs available`);
+                  validatedEdge.sourceHandle = undefined;
+                  handleChanged = true;
+                }
+              }
+            }
+            
+            // Force edge recreation if handles were changed during validation
+            if (handleChanged) {
+              const timestamp = Date.now();
+              const baseId = edge.id.split('-')[0];
+              validatedEdge.id = `${baseId}-validated-${timestamp}`;
+              console.log(`Changed edge ID from ${edge.id} to ${validatedEdge.id} after handle validation`);
+            }
+            
+            return validatedEdge;
+          });
+          
+          setTransformedEdges(validatedEdges);
 
           // Update node counter based on existing nodes
           if (project.nodes.length > 0) {

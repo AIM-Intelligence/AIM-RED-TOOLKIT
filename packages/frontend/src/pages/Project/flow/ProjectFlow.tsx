@@ -1,4 +1,4 @@
-import { useMemo, useEffect, type ReactNode } from "react";
+import { useMemo, useEffect, useCallback, useRef, type ReactNode } from "react";
 import {
   ReactFlow,
   MiniMap,
@@ -7,6 +7,7 @@ import {
   Panel,
   ReactFlowProvider,
   useReactFlow,
+  useUpdateNodeInternals,
   type NodeTypes,
   type EdgeTypes,
   type Edge,
@@ -46,37 +47,51 @@ function ProjectFlowInner({
   isValidConnection,
   children,
 }: ProjectFlowProps) {
-  const { updateNodeInternals } = useReactFlow();
+  const updateNodeInternals = useUpdateNodeInternals();
+  const pendingUpdatesRef = useRef(new Set<string>());
+  const rafRef = useRef<number>(0);
+  
+  // Queue updateNodeInternals calls to batch them
+  const queueUpdateInternals = useCallback((nodeId: string) => {
+    pendingUpdatesRef.current.add(nodeId);
+    
+    // Cancel any pending frame
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+    }
+    
+    // Schedule batch update on next frame
+    rafRef.current = requestAnimationFrame(() => {
+      const updates = Array.from(pendingUpdatesRef.current);
+      pendingUpdatesRef.current.clear();
+      rafRef.current = 0;
+      
+      console.log(`Batch updating node internals for: ${updates.join(', ')}`);
+      updates.forEach(id => {
+        try {
+          updateNodeInternals(id);
+        } catch (error) {
+          console.warn(`Failed to update node internals for ${id}:`, error);
+        }
+      });
+    });
+  }, [updateNodeInternals]);
   
   // Listen for custom event to update node internals
   useEffect(() => {
-    const handleForceUpdate = (event: CustomEvent) => {
+    const handleUpdateNodeInternals = (event: CustomEvent) => {
       const { nodeId } = event.detail;
-      console.log(`Updating node internals for ${nodeId} from ProjectFlow`);
-      
-      // 여러 시점에 업데이트하여 확실히 적용
-      updateNodeInternals(nodeId);
-      
-      // DOM 렌더링 후 추가 업데이트
-      requestAnimationFrame(() => {
-        updateNodeInternals(nodeId);
-      });
-      
-      // 추가 지연 후 한 번 더 업데이트
-      setTimeout(() => {
-        updateNodeInternals(nodeId);
-      }, 100);
-      
-      setTimeout(() => {
-        updateNodeInternals(nodeId);
-      }, 300);
+      queueUpdateInternals(nodeId);
     };
     
-    window.addEventListener('forceUpdateNodeInternals' as any, handleForceUpdate);
+    window.addEventListener('reactFlowUpdateNodeInternals' as any, handleUpdateNodeInternals);
     return () => {
-      window.removeEventListener('forceUpdateNodeInternals' as any, handleForceUpdate);
+      window.removeEventListener('reactFlowUpdateNodeInternals' as any, handleUpdateNodeInternals);
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
     };
-  }, [updateNodeInternals]);
+  }, [queueUpdateInternals]);
 
   // Define node types
   const nodeTypes = useMemo<NodeTypes>(
@@ -103,9 +118,9 @@ function ProjectFlowInner({
 
   return (
     <ReactFlow
-        nodes={nodes}
+        nodes={nodes as any}
         edges={edges}
-        onNodesChange={onNodesChange}
+        onNodesChange={onNodesChange as any}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         nodeTypes={nodeTypes}

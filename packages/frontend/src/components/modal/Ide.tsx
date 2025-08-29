@@ -119,8 +119,6 @@ const IdeModal: React.FC<IdeModalProps> = ({
           if (metadataResult.success && metadataResult.metadata) {
             setNodeMetadata(metadataResult.metadata);
             console.log("Metadata fetched after save:", metadataResult.metadata);
-            console.log("Inputs:", metadataResult.metadata.inputs);
-            console.log("Outputs:", metadataResult.metadata.outputs);
             
             // Emit custom event to update node ports in the flow with slight delay
             setTimeout(() => {

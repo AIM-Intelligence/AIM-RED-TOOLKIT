@@ -93,7 +93,7 @@ export default function Home() {
       <div className="max-w-7xl mx-auto">
         <div className="h-9 flex flex-row items-center mb-3">
           <img src="/aim-red.png" alt="AIM-Intelligence" className="h-8 mr-2" />
-          <h1 className="text-4xl font-bold ">Projects</h1>
+          <h1 className="text-4xl font-bold ">AIM-RedLab</h1>
         </div>
 
         <p className="text-neutral-400 mb-8">
@@ -105,7 +105,7 @@ export default function Home() {
             <div
               key={project.project_id}
               onClick={() => handleProjectClick(project)}
-              className="bg-black border-2 border-neutral-500 rounded-lg p-6 cursor-pointer hover:bg-neutral-900 hover:border-red-700 transition-all duration-200 relative group"
+              className="bg-black border-2 border-neutral-500 rounded-lg p-6 hover:bg-neutral-900 hover:border-red-700 transition-all duration-200 relative group"
             >
               {/* Header with icons */}
               <div className="flex justify-between items-start mb-2">

@@ -110,7 +110,8 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
                 setModalState({
                   isOpen: true,
                   status: "loading",
-                  message: `Running flow... (${event.node_index}/${event.total_nodes}) ${event.node_title || ''}`,
+                  // message: `Running flow... (${event.node_index}/${event.total_nodes}) ${event.node_title || ''}`,
+                  message: `Running flow... (${event.node_index}/${event.total_nodes})`,
                   errorDetails: undefined,
                 });
               }
@@ -137,7 +138,7 @@ export default function StartNode(props: NodeProps<StartNodeType>) {
                 errorDetails: undefined,
               });
               
-              setToastMessage(`✅ Flow executed successfully! (${nodeCount} nodes in ${timeMs}ms)`);
+              setToastMessage(`Flow executed successfully! (${nodeCount} nodes in ${timeMs}ms)`);
               setTimeout(() => setToastMessage(null), 3000);
               
               setIsRunning(false);

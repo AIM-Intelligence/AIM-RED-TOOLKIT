@@ -162,6 +162,19 @@ export const projectApi = {
     });
   },
 
+  // Update edge handles
+  async updateEdge(data: {
+    project_id: string;
+    edge_id: string;
+    source_handle?: string | null;
+    target_handle?: string | null;
+  }): Promise<{ success: boolean; message?: string }> {
+    return apiCall("/project/updateedge", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
   // Execute flow
   async executeFlow(data: ExecuteFlowRequest): Promise<ExecuteFlowResponse> {
     return apiCall<ExecuteFlowResponse>("/project/execute-flow", {
